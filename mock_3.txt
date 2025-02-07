@@ -1,0 +1,520 @@
+Create a new service account with the name pvviewer. 
+Grant this Service account access to list all PersistentVolumes in the cluster by creating an appropriate cluster role called pvviewer-role and \
+ClusterRoleBinding called pvviewer-role-binding.
+Next, create a pod called pvviewer with the image: redis and serviceAccount: pvviewer in the default namespace
+
+    ServiceAccount: pvviewer
+    ClusterRole: pvviewer-role
+    ClusterRoleBinding: pvviewer-role-binding
+    Pod: pvviewer
+    Pod configured to use ServiceAccount pvviewer ? 
+
+controlplane $ kubectl get nodes 
+NAME           STATUS   ROLES    AGE     VERSION
+controlplane   Ready    master   3m29s   v1.19.0
+node01         Ready    <none>   2m43s   v1.19.0
+node02         Ready    <none>   2m41s   v1.19.0
+node03         Ready    <none>   2m43s   v1.19.0
+controlplane $ 
+controlplane $ kubectl create sa pvviewer
+serviceaccount/pvviewer created
+
+controlplane $ kubectl create clusterrole pvviewer-role --resource=PersistentVolumes --verb=list 
+clusterrole.rbac.authorization.k8s.io/pvviewer-role created
+
+controlplane $ kubectl create clusterrolebinding pvviewer-role --clusterrole=pvviewer --serviceaccount=pvviewer
+error: serviceaccount must be <namespace>:<name>
+controlplane $ kubectl create clusterrolebinding pvviewer-role --clusterrole=pvviewer --serviceaccount=default:pvviewer
+clusterrolebinding.rbac.authorization.k8s.io/pvviewer-role created
+controlplane $
+controlplane $ kubectl run pvviewer --image=redis --dry-run=client -o yaml 
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  labels:
+    run: pvviewer
+  name: pvviewer
+spec:
+  containers:
+  - image: redis
+    name: pvviewer
+    resources: {}
+  dnsPolicy: ClusterFirst
+  restartPolicy: Always
+status: {}
+controlplane $ kubectl run pvviewer --image=redis --dry-run=client -o yaml > pod.yaml
+controlplane $ vim pod.yaml 
+controlplane $ 
+controlplane $ kubectl apply -f pod.yaml 
+pod/pvviewer created
+controlplane $ kubectl describe pods pvviewer 
+Name:         pvviewer
+Namespace:    default
+Priority:     0
+Node:         node02/172.17.0.20
+Start Time:   Mon, 10 May 2021 05:47:51 +0000
+Labels:       run=pvviewer
+Annotations:  Status:  Running
+IP:           10.38.0.1
+IPs:
+  IP:  10.38.0.1
+Containers:
+  pvviewer:
+    Container ID:   docker://74a7d2aa4c25abc6eb889a599b05e37f1e444df8affc2c05d68039e9aad6fc6c
+    Image:          redis
+    Image ID:       docker-pullable://redis@sha256:eff56acc5fc7b909183da93236ba09d3b8cb7d6db31d5b25e9a46dac9b5e699b
+    Port:           <none>
+    Host Port:      <none>
+    State:          Running
+      Started:      Mon, 10 May 2021 05:48:03 +0000
+    Ready:          True
+    Restart Count:  0
+    Environment:    <none>
+    Mounts:
+      /var/run/secrets/kubernetes.io/serviceaccount from pvviewer-token-pvjpw (ro)
+Conditions:
+  Type              Status
+  Initialized       True 
+  Ready             True 
+  ContainersReady   True 
+  PodScheduled      True 
+Volumes:
+  pvviewer-token-pvjpw:
+    Type:        Secret (a volume populated by a Secret)
+    SecretName:  pvviewer-token-pvjpw				##Good point of verification!!
+    Optional:    false
+QoS Class:       BestEffort
+Node-Selectors:  <none>
+Tolerations:     node.kubernetes.io/not-ready:NoExecute for 300s
+                 node.kubernetes.io/unreachable:NoExecute for 300s
+Events:
+  Type    Reason     Age   From               Message
+  ----    ------     ----  ----               -------
+  Normal  Scheduled  19s   default-scheduler  Successfully assigned default/pvviewer to node02
+  Normal  Pulling    15s   kubelet, node02    Pulling image "redis"
+  Normal  Pulled     8s    kubelet, node02    Successfully pulled image "redis" in 7.781020965s
+  Normal  Created    6s    kubelet, node02    Created container pvviewer
+  Normal  Started    6s    kubelet, node02    Started container pvviewer
+controlplane $ 
+########################################
+
+controlplane $ kubectl get nodes -o jsonpath='{.items[*].status.addresses[?(@.type=="ExternalIP")].address}'
+controlplane $ kubectl get nodes -o jsonpath='{.items[*].status.addresses[?(@.type=="InternalIP")].address}'
+172.17.0.18 172.17.0.19 172.17.0.20 172.17.0.25
+
+controlplane $ kubectl get nodes -o jsonpath='{.items[*].status.addresses[?(@.type=="InternalIP")].address}' > /root/CKA/node_ips  
+172.17.0.18 172.17.0.19 172.17.0.20 172.17.0.25
+controlplane $ cat /root/CKA/node_ips 
+172.17.0.18 172.17.0.19 172.17.0.20 172.17.0.25
+controlplane $ 
+########################################
+
+Create a pod called multi-pod with two containers.
+Container 1, name: alpha, image: nginx
+Container 2: beta, image: busybox, command sleep 4800.
+
+Environment Variables:
+container 1:
+name: alpha
+
+Container 2:
+name: beta
+
+controlplane $ kubectl run --generator=run-pod/v1 alpha --image=nginx --dry-run=client -o yaml > multi-pod.yaml
+
+controlplane $ kubectl get pods
+NAME        READY   STATUS    RESTARTS   AGE
+multi-pod   1/1     Running   0          30s
+pvviewer    1/1     Running   0          42m
+controlplane $ cat multi-pod.yaml 
+apiVersion: v1
+kind: Pod
+metadata:
+  name: multi-pod
+spec:
+  containers:
+  - image: nginx
+    name: alpha 
+    env:
+     - name: name
+       value: alpha
+  containers:
+  - image: busybox
+    name: beta
+    command : ["sleep", "4800"]
+    env:
+     - name: name
+       value: beta
+controlplane $ 
+
+root@controlplane:~# cat multi-pod.yaml		##Worked!
+apiVersion: v1
+kind: Pod
+metadata:
+  name: multi-pod 
+spec:
+  restartPolicy: Never
+  containers:
+    - image: nginx
+      name: alpha
+      env:
+      - name: Container1
+        value: alpha
+
+    - image: busybox
+      name: beta
+      command:
+        - "sleep"
+        - "4800"
+      env:
+        - name: Container2
+          value: beta
+
+root@controlplane:~# 
+########################################
+
+controlplane $ kubectl run --generator=run-pod/v1 lion --image=redis:alpine --dry-run=client -o yaml > lion.yaml
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: lion
+spec:
+  containers:
+  - image: redis:alpine
+    name: lion    
+    resources:
+     limits:
+      cpu: "2"
+      memory: "500MiB"
+########################################
+
+## NetworkPolicy ##
+
+controlplane $ kubectl get pod,svc
+NAME            READY   STATUS    RESTARTS   AGE
+pod/np-test-1   1/1     Running   0          38s
+
+NAME                      TYPE        CLUSTER-IP    EXTERNAL-IP   PORT(S)   AGE
+service/kubernetes        ClusterIP   10.96.0.1     <none>        443/TCP   15m
+service/np-test-service   ClusterIP   10.103.70.9   <none>        80/TCP    38s
+controlplane $ 
+controlplane $ kubectl describe svc np-test-service 
+Name:              np-test-service
+Namespace:         default
+Labels:            run=np-test-1
+Annotations:       <none>
+Selector:          run=np-test-1
+Type:              ClusterIP
+IP:                10.103.70.9		##IP on service / ClusterIP
+Port:              <unset>  80/TCP
+TargetPort:        80/TCP
+Endpoints:         10.38.0.1:80		##IP on Pod
+Session Affinity:  None
+Events:            <none>
+controlplane $
+
+controlplane $ kubectl run test-np --image=busybox:1.28 --rm -it -- sh
+If you don't see a command prompt, try pressing enter.
+/ # nc --help
+BusyBox v1.28.4 (2018-05-22 17:00:17 UTC) multi-call binary.
+Usage: nc [OPTIONS] HOST PORT  - connect
+        -l      Listen mode, for inbound connects
+        -w SEC  Timeout for connects and final net reads
+        -v      Verbose
+        -z      Zero-I/O mode (scanning)
+/ # nc -z -v -w 2 np-test-service 80
+nc: np-test-service (10.103.70.9:80): Connection timed out	##timed out!!
+/ # nc -l -v -w 2 np-test-service 80
+listening on 0.0.0.0:37371 ...
+nc: timeout
+/ # 
+/ # exit
+Session ended, resume using 'kubectl attach test-np -c test-np -i -t' command when the pod is running
+pod "test-np" deleted
+controlplane $ kubectl get pods
+NAME        READY   STATUS        RESTARTS   AGE
+np-test-1   1/1     Running       0          35m
+test-np     0/1     Terminating   0          24m
+controlplane $
+controlplane $ kubectl get networkpolicies.networking.k8s.io              
+NAME           POD-SELECTOR   AGE
+default-deny   <none>         35m
+controlplane $ 
+
+controlplane $ kubectl describe networkpolicies.networking.k8s.io default-deny 
+Name:         default-deny
+Namespace:    default
+Created on:   2021-05-26 04:18:56 +0000 UTC
+Labels:       <none>
+Annotations:  Spec:
+  PodSelector:     <none> (Allowing the specific traffic to all pods in this namespace)
+  Allowing ingress traffic:
+    <none> (Selected pods are isolated for ingress connectivity)
+  Not affecting egress traffic
+  Policy Types: Ingress
+controlplane $ 
+
+controlplane $ kubectl describe pod np-test-1 | grep Labels 
+Labels:       run=np-test-1
+controlplane $ kubectl get pod np-test-1 --show-
+--show-kind    --show-labels  
+controlplane $ kubectl get pod np-test-1 --show-labels 
+NAME        READY   STATUS    RESTARTS   AGE   LABELS
+np-test-1   1/1     Running   0          13m   run=np-test-1
+
+controlplane $ cat np.yaml 
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ingress-to-nptest 
+  namespace: default
+spec:
+  podSelector:
+    matchLabels:
+      role: db		##LABELS value goes here!
+  policyTypes:
+  - Ingress
+  ingress:
+    ports:
+    - protocol: TCP
+      port: 80
+controlplane $ vi np.yaml  
+controlplane $ cat np.yaml 
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ingress-to-nptest 
+  namespace: default
+spec:
+  podSelector:
+    matchLabels:
+      run: np-test-1
+  policyTypes:
+  - Ingress
+  ingress:
+  - ports:		##port under ingress
+    - protocol: TCP
+      port: 80
+controlplane $     
+
+controlplane $ kubectl apply -f np.yaml 
+networkpolicy.networking.k8s.io/ingress-to-nptest created
+controlplane $ kubectl describe networkpolicies.networking.k8s.io ingress-to-nptest 
+Name:         ingress-to-nptest
+Namespace:    default
+Created on:   2021-05-26 05:41:48 +0000 UTC
+Labels:       <none>
+Annotations:  Spec:
+  PodSelector:     role=np-test-1
+  Allowing ingress traffic:
+    To Port: 80/TCP
+    From: <any> (traffic not restricted by source)
+  Not affecting egress traffic
+  Policy Types: Ingress
+controlplane $ 
+
+root@controlplane:~# kubectl run np-test --image=busybox:1.28 --rm -it -- sh 
+If you don't see a command prompt, try pressing enter.
+/ # 
+/ # nc -z -v -w 2 np-test-service 80
+np-test-service (10.100.171.79:80) open
+/ # 
+
+controlplane $ kubectl taint nodes node01 env_type=production:NoSchedule
+node/node01 tainted
+controlplane $ kubectl describe nodes node01 | grep -i taint
+
+Taints:             env_type=production:NoSchedule
+controlplane $ 
+
+controlplane $ kubectl run dev-redis --image=redis:alpine
+pod/dev-redis created
+controlplane $ kubectl get pods -o wide
+NAME                           READY   STATUS    RESTARTS   AGE   IP          NODE     NOMINATED NODE   READINESS GATES
+dev-redis                      1/1     Running   0          18s   10.38.0.2   node03   <none>           <none>
+nginx-deploy-8588f9dfb-6hdhv   1/1     Running   0          21m   10.34.0.2   node01   <none>           <none>
+np-test-1                      1/1     Running   0          21m   10.40.0.1   node02   <none>           <none>
+controlplane $ 
+
+controlplane $ kubectl run hr-pod --image=redis:alpine -l environment=production,tier=frontend --namespace=hr
+pod/hr-pod created
+controlplane $ kubectl get pods
+NAME         READY   STATUS    RESTARTS   AGE
+dev-redis    1/1     Running   0          26m
+np-test-1    1/1     Running   0          30m
+prod-redis   1/1     Running   0          9m7s
+controlplane $ kubectl get pods --namespace=hr
+NAME     READY   STATUS    RESTARTS   AGE
+hr-pod   1/1     Running   0          10s
+controlplane $ 
+
+controlplane $ kubectl run hr-pod --image=redis:alpine --labels=nvironment=production,tier=frontend --namespace=hr
+pod/hr-pod created
+controlplane $ kubectl get pods --namespace=hr
+NAME     READY   STATUS    RESTARTS   AGE
+hr-pod   1/1     Running   0          4s
+controlplane $ 
+
+## 08jun2021 ##
+
+controlplane $ kubectl create role pvviewer-role --resource=PersistentVolumes --verb=list 
+role.rbac.authorization.k8s.io/pvviewer-role created
+controlplane $
+controlplane $ kubectl create sa pvviewer
+serviceaccount/pvviewer created
+controlplane $ 
+controlplane $ kubectl create rolebinding pvviewer-role-binding --role=pvviewer-role --serviceaccount=default:pvviewer
+rolebinding.rbac.authorization.k8s.io/pvviewer-role-binding created
+controlplane $  
+controlplane $ kubectl run pvviewer --image=redis --serviceaccount=pvviewer
+pod/pvviewer created
+controlplane $ 
+
+controlplane $ kubectl get nodes -o jsonpath='{.items[*].status.addresses[?(@.type=="ExternalIP")].address}'
+controlplane $ kubectl get nodes -o jsonpath='{.items[*].status.addresses[?(@.type=="InternalIP")].address}'
+172.17.0.13 172.17.0.14 172.17.0.26 172.17.0.28controlplane $ kubectl get nodes -o jsonpath='{.items[*].status.addresses[?(@.type=="InternalIP")].address}' > /root/CKA/node_ips
+controlplane $ 
+
+controlplane $ cat multi-pod.yaml 
+apiVersion: v1
+kind: Pod
+metadata:
+  name: multi-pod
+spec:
+  containers:
+  - name: alpha 
+    image: nginx
+    env:
+    - name: name
+      value: "alpha"
+
+  - name: beta 
+    image: busybox
+    command: ["sleep","4800"]
+    env:
+    - name: name
+      value: "beta"
+controlplane $ 
+
+controlplane $ kubectl apply -f non-root-pod.yaml 
+pod/non-root-pod created
+controlplane $ cat non-root-pod.yaml 
+apiVersion: v1
+kind: Pod
+metadata:
+  name: non-root-pod 
+spec:
+  securityContext:
+    runAsUser: 1000
+    fsGroup: 2000
+  containers:
+  - name: non-root-pod1 
+    image: redis:alpine
+controlplane $ 
+
+controlplane $ kubectl taint node node01 env_type=production:NoSchedule
+node/node01 tainted
+controlplane $ kubectl describe nodes node01 | grep -i taint
+Taints:             env_type=production:NoSchedule
+controlplane $ 
+
+controlplane $ cat prod-redis.yaml 
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  labels:
+    run: prod-redis
+  name: prod-redis
+spec:
+  containers:
+  - image: redis:alpine
+    name: prod-redis
+  tolerations:
+  - key: "env_type"
+    operator: "Equal"
+    effect: "NoSchedule"
+controlplane $ 
+
+controlplane $ kubectl apply -f lion.yaml 
+pod/lion created
+controlplane $ cat lion.yaml 
+apiVersion: v1
+kind: Pod
+metadata:
+  name: lion
+spec:
+  containers:
+  - name: app
+    image: redis 
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "1"
+      limits:
+        memory: "500Mi"
+        cpu: "2"
+controlplane $ 
+##########
+
+controlplane $ kubectl get pod
+NAME        READY   STATUS    RESTARTS   AGE
+np-test-1   1/1     Running   0          102s
+controlplane $ kubectl get svc
+NAME              TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)   AGE
+kubernetes        ClusterIP   10.96.0.1       <none>        443/TCP   5m49s
+np-test-service   ClusterIP   10.100.197.57   <none>        80/TCP    106s
+controlplane $ kubectl describe svc np-test-service 
+Name:              np-test-service
+Namespace:         default
+Labels:            run=np-test-1
+Annotations:       <none>
+Selector:          run=np-test-1
+Type:              ClusterIP
+IP:                10.100.197.57
+Port:              <unset>  80/TCP
+TargetPort:        80/TCP
+Endpoints:         10.42.0.1:80
+Session Affinity:  None
+Events:            <none>
+controlplane $ kubectl run nw-test --image=busybox1:28 --rm -it -- sh 
+^Ccontrolplane $ kubectl run nw-test --image=busybox1:28 --rm -it -- sh 
+Error from server (AlreadyExists): pods "nw-test" already exists
+controlplane $ kubectl get pods
+NAME        READY   STATUS             RESTARTS   AGE
+np-test-1   1/1     Running            0          6m48s
+nw-test     0/1     ImagePullBackOff   0          2m10s
+controlplane $ kubectl delete pod nw-test 
+pod "nw-test" deleted
+controlplane $ kubectl run nw-test --image=busybox1:28 --rm -it -- sh 
+^Ccontrolplane $ kubectl delete pod nw-test 
+pod "nw-test" deleted
+controlplane $ kubectl run nw-test --image=busybox:1.28 --rm -it -- sh 
+If you don't see a command prompt, try pressing enter.
+/ # nc -z -v -w 2 np-test-service 80
+nc: bad address 'np-test-service'
+/ # nc -z -v -w 2 10.100.197.57 80
+nc: 10.100.197.57 (10.100.197.57:80): Connection timed out
+/ # 
+/ # exit
+Session ended, resume using 'kubectl attach nw-test -c nw-test -i -t' command when the pod is running
+pod "nw-test" deleted
+controlplane $ 
+controlplane $ 
+controlplane $ kubectl get networkpolicies.networking.k8s.io 
+NAME           POD-SELECTOR   AGE
+default-deny   <none>         11m
+controlplane $ kubectl describe networkpolicies.networking.k8s.io default-deny 
+Name:         default-deny
+Namespace:    default
+Created on:   2021-06-09 04:31:11 +0000 UTC
+Labels:       <none>
+Annotations:  Spec:
+  PodSelector:     <none> (Allowing the specific traffic to all pods in this namespace)
+  Allowing ingress traffic:
+    <none> (Selected pods are isolated for ingress connectivity)
+  Not affecting egress traffic
+  Policy Types: Ingress
+controlplane $ 

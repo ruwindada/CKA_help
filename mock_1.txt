@@ -1,0 +1,333 @@
+source <(kubectl completion bash) # set up autocomplete in bash into the current shell, bash-completion package should be installed first.
+echo "source <(kubectl completion bash)" >> ~/.bashrc # add autocomplete permanently to your bash shell.
+
+alias k=kubectl
+export do="--dry-run=client -o yaml"
+
+
+## mock exam1 ##
+
+## Kubectl autocomplete ##
+REF - https://kubernetes.io/docs/reference/kubectl/cheatsheet/#kubectl-autocomplete
+
+controlplane $ kubectl expose pod msg --name messaging-service --port 6379 --target-port 6379
+service/messaging-service exposed
+controlplane $ kubectl get svc
+NAME                TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)    AGE
+kubernetes          ClusterIP   10.96.0.1        <none>        443/TCP    54m
+messaging-service   ClusterIP   10.107.116.241   <none>        6379/TCP   13s
+controlplane $ kubectl describe svc messaging-service 
+Name:              messaging-service
+Namespace:         default
+Labels:            run=tier
+Annotations:       <none>
+Selector:          run=tier
+Type:              ClusterIP
+IP:                10.107.116.241
+Port:              <unset>  6379/TCP
+TargetPort:        6379/TCP
+Endpoints:         10.244.1.4:6379
+Session Affinity:  None
+Events:            <none>
+controlplane $ 
+
+controlplane $ kubectl get pods
+NAME        READY   STATUS    RESTARTS   AGE
+messaging   1/1     Running   0          13m
+nginx-pod   1/1     Running   0          14m
+controlplane $ 
+controlplane $ kubectl get svc
+NAME         TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+kubernetes   ClusterIP   10.96.0.1    <none>        443/TCP   69m
+controlplane $ kubectl expose pod messaging --name messaging-service --target-port 6379 --port 6379
+service/messaging-service exposed
+controlplane $ kubectl get svc
+NAME                TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)    AGE
+kubernetes          ClusterIP   10.96.0.1        <none>        443/TCP    71m
+messaging-service   ClusterIP   10.104.231.255   <none>        6379/TCP   18s
+controlplane $ kubectl describe svc messaging-service 
+Name:              messaging-service
+Namespace:         default
+Labels:            tier=msg
+Annotations:       <none>
+Selector:          tier=msg
+Type:              ClusterIP
+IP:                10.104.231.255
+Port:              <unset>  6379/TCP
+TargetPort:        6379/TCP
+Endpoints:         10.244.1.3:6379
+Session Affinity:  None
+Events:            <none>
+controlplane $ 
+
+root@controlplane:~# kubectl get --help
+  -o, --output='': Output format. One of:
+json|yaml|wide|name|custom-columns=...|custom-columns-file=...|go-template=...|go-template-file=...|jsonpath=...|jsonpath-file=...
+
+root@controlplane:~# kubectl get nodes -o json
+{
+    "apiVersion": "v1",
+    "items": [
+        {
+            "apiVersion": "v1",
+            "kind": "Node",
+            "metadata": {
+                "annotations": {
+                    "flannel.alpha.coreos.com/backend-data": "{\"VNI\":1,\"VtepMAC\":\"26:f1:69:4d:76:5e\"}",
+                    "flannel.alpha.coreos.com/backend-type": "vxlan",
+                    "flannel.alpha.coreos.com/kube-subnet-manager": "true",
+                    "flannel.alpha.coreos.com/public-ip": "10.16.243.6",
+                    "kubeadm.alpha.kubernetes.io/cri-socket": "/var/run/dockershim.sock",
+                    "node.alpha.kubernetes.io/ttl": "0",
+                    "volumes.kubernetes.io/controller-managed
+..
+...
+....
+
+root@controlplane:~# kubectl get nodes -o json > /opt/outputs/nodes-z3444kd9.json
+root@controlplane:~# 
+
+root@controlplane:~# kubectl get pods 
+NAME        READY   STATUS    RESTARTS   AGE
+messaging   1/1     Running   0          9m4s
+nginx-pod   1/1     Running   0          9m45s
+root@controlplane:~# kubectl expose pod messaging --name=messaging-service --port=6379 --target-port=6379 --type=ClusterIP
+service/messaging-service exposed
+root@controlplane:~# kubectl describe svc messaging-service 
+Name:              messaging-service
+Namespace:         default
+Labels:            tier=msg
+Annotations:       <none>
+Selector:          tier=msg
+Type:              ClusterIP
+IP Families:       <none>
+IP:                10.111.54.194
+IPs:               10.111.54.194
+Port:              <unset>  6379/TCP
+TargetPort:        6379/TCP
+Endpoints:         10.244.0.5:6379
+Session Affinity:  None
+Events:            <none>
+root@controlplane:~# 
+
+root@controlplane:~# kubectl create deployment hr-web-app --image=kodekloud/webapp-color
+deployment.apps/hr-web-app created
+root@controlplane:~# kubectl scale deployment hr-web-app --replicas=2
+deployment.apps/hr-web-app scaled
+root@controlplane:~# kubectl describe deployments.apps hr-web-app 
+Name:                   hr-web-app
+Namespace:              default
+CreationTimestamp:      Tue, 08 Jun 2021 01:21:52 +0000
+Labels:                 app=hr-web-app
+Annotations:            deployment.kubernetes.io/revision: 1
+Selector:               app=hr-web-app
+Replicas:               2 desired | 2 updated | 2 total | 2 available | 0 unavailable
+StrategyType:           RollingUpdate
+MinReadySeconds:        0
+RollingUpdateStrategy:  25% max unavailable, 25% max surge
+Pod Template:
+  Labels:  app=hr-web-app
+  Containers:
+   webapp-color:
+    Image:        kodekloud/webapp-color
+    Port:         <none>
+    Host Port:    <none>
+    Environment:  <none>
+    Mounts:       <none>
+  Volumes:        <none>
+Conditions:
+  Type           Status  Reason
+  ----           ------  ------
+  Progressing    True    NewReplicaSetAvailable
+  Available      True    MinimumReplicasAvailable
+OldReplicaSets:  <none>
+NewReplicaSet:   hr-web-app-99dfd4c9d (2/2 replicas created)
+Events:
+  Type    Reason             Age   From                   Message
+  ----    ------             ----  ----                   -------
+  Normal  ScalingReplicaSet  38s   deployment-controller  Scaled up replica set hr-web-app-99dfd4c9d to 1
+  Normal  ScalingReplicaSet  17s   deployment-controller  Scaled up replica set hr-web-app-99dfd4c9d to 2
+root@controlplane:~# kubectl get deployments.apps hr-web-app -o wide
+NAME         READY   UP-TO-DATE   AVAILABLE   AGE   CONTAINERS     IMAGES                   SELECTOR
+hr-web-app   2/2     2            2           55s   webapp-color   kodekloud/webapp-color   app=hr-web-app
+root@controlplane:~# 
+
+##########
+root@controlplane:~# ps -ef | grep -i kubelet
+..
+root      4758     1  0 Jun07 ?        00:03:56 /usr/bin/kubelet --bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf --config=/var/lib/kubelet/config.yaml --network-plugin=cni --pod-infra-container-image=k8s.gcr.io/pause:3.2
+root@controlplane:~#
+
+root@controlplane:~# cat /var/lib/kubelet/config.yaml | grep -i static
+staticPodPath: /etc/kubernetes/manifests
+root@controlplane:~# 
+
+root@controlplane:/etc/kubernetes/manifests# kubectl run static-busybox --image=busybox --command sleep 4800 --dry-run=client -o yaml > static-busybox.yaml
+root@controlplane:/etc/kubernetes/manifests# ls
+etcd.yaml  kube-apiserver.yaml  kube-controller-manager.yaml  kube-scheduler.yaml  static-busybox.yaml
+root@controlplane:/etc/kubernetes/manifests# kubectl get pods
+NAME                          READY   STATUS    RESTARTS   AGE
+hr-web-app-99dfd4c9d-58cv6    1/1     Running   0          10m
+hr-web-app-99dfd4c9d-qm9zr    1/1     Running   0          9m44s
+messaging                     1/1     Running   0          23m
+nginx-pod                     1/1     Running   0          23m
+static-busybox-controlplane   1/1     Running   0          11s
+root@controlplane:/etc/kubernetes/manifests# 
+##########
+
+root@controlplane:~# kubectl get pods
+NAME                          READY   STATUS    RESTARTS   AGE
+hr-web-app-99dfd4c9d-58cv6    1/1     Running   0          15m
+hr-web-app-99dfd4c9d-qm9zr    1/1     Running   0          14m
+messaging                     1/1     Running   0          28m
+nginx-pod                     1/1     Running   0          29m
+orange                        1/1     Running   0          34s
+static-busybox-controlplane   1/1     Running   0          5m20s
+root@controlplane:~# kubectl get deployments.apps 
+NAME         READY   UP-TO-DATE   AVAILABLE   AGE
+hr-web-app   2/2     2            2           15m
+root@controlplane:~# kubectl get svc              
+NAME                TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
+kubernetes          ClusterIP   10.96.0.1       <none>        443/TCP    98m
+messaging-service   ClusterIP   10.111.54.194   <none>        6379/TCP   16m
+root@controlplane:~# 
+root@controlplane:~# 
+root@controlplane:~# kubectl expose deployment hr-web-app --name
+--name        --name=       --namespace   --namespace=  
+root@controlplane:~# kubectl expose deployment hr-web-app --name
+--name        --name=       --namespace   --namespace=  
+root@controlplane:~# kubectl expose deployment hr-web-app --name=hr-web-app-service --port=8080 --target-port=8080 --type=NodePort --dry-run=client -o yaml > hr-web-app-service.yaml
+root@controlplane:~# ls
+hr-web-app-service.yaml  orange.yaml  sample.yaml
+root@controlplane:~# vi hr-web-app-service.yaml 
+root@controlplane:~#
+
+root@controlplane:~# cat hr-web-app-service.yaml 
+apiVersion: v1
+kind: Service
+metadata:
+  creationTimestamp: null
+  labels:
+    app: hr-web-app
+  name: hr-web-app-service
+spec:
+  ports:
+  - port: 8080
+    protocol: TCP
+    targetPort: 8080
+    nodePort: 30833
+  selector:
+    app: hr-web-app
+  type: NodePort
+status:
+  loadBalancer: {}
+root@controlplane:~# 
+
+root@controlplane:~# kubectl apply -f hr-web-app-service.yaml 
+service/hr-web-app-service created
+root@controlplane:~# kubectl describe svc hr-web-app-service 
+Name:                     hr-web-app-service
+Namespace:                default
+Labels:                   app=hr-web-app
+Annotations:              <none>
+Selector:                 app=hr-web-app
+Type:                     NodePort
+IP Families:              <none>
+IP:                       10.105.171.110
+IPs:                      10.105.171.110
+Port:                     <unset>  8080/TCP
+TargetPort:               8080/TCP
+NodePort:                 <unset>  30833/TCP
+Endpoints:                10.244.0.6:8080,10.244.0.7:8080
+Session Affinity:         None
+External Traffic Policy:  Cluster
+Events:                   <none>
+root@controlplane:~# 
+##########
+
+root@controlplane:~# kubectl get nodes -o jsonpath='{.items[*].status}' | head
+{"addresses":[{"address":"10.16.243.6","type":"InternalIP"},{"address":"controlplane","type":"Hostname"}],"allocatable":{"cpu":"48","ephemeral-storage":
+
+root@controlplane:~# kubectl get nodes -o jsonpath='{.items[*].status.node}'       
+root@controlplane:~# kubectl get nodes -o jsonpath='{.items[*].status.nodeInfo}'
+{"architecture":"amd64","bootID":"fee5f00b-f6e2-4ed1-a0c5-1b528481a9a5","containerRuntimeVersion":"docker://19.3.0","kernelVersion":"5.4.0-1043-gcp","kubeProxyVersion":"v1.20.0","kubeletVersion":"v1.20.0","machineID":"4728bdd8508642dcb1a335cb42879705","operatingSystem":"linux","osImage":"Ubuntu 18.04.5 LTS","systemUUID":"4728bdd8508642dcb1a335cb42879705"}root@controlplane:~# 
+
+root@controlplane:~# kubectl get pods
+NAME        READY   STATUS    RESTARTS   AGE
+messaging   1/1     Running   0          64s
+nginx-pod   1/1     Running   0          8m25s
+root@controlplane:~# kubectl get svc 
+NAME         TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+kubernetes   ClusterIP   10.96.0.1    <none>        443/TCP   24m
+root@controlplane:~# kubectl expose pod messaging --name=messaging-service --port=6379 --target-port=6379 --type=ClusterIP
+service/messaging-service exposed
+root@controlplane:~# kubectl get svc
+NAME                TYPE        CLUSTER-IP    EXTERNAL-IP   PORT(S)    AGE
+kubernetes          ClusterIP   10.96.0.1     <none>        443/TCP    25m
+messaging-service   ClusterIP   10.96.53.78   <none>        6379/TCP   5s
+root@controlplane:~# kubectl describe svc messaging-service 
+Name:              messaging-service
+Namespace:         default
+Labels:            tier=msg
+Annotations:       <none>
+Selector:          tier=msg
+Type:              ClusterIP
+IP Families:       <none>
+IP:                10.96.53.78
+IPs:               10.96.53.78
+Port:              <unset>  6379/TCP
+TargetPort:        6379/TCP
+Endpoints:         10.244.0.5:6379
+Session Affinity:  None
+Events:            <none>
+root@controlplane:~# 
+
+root@controlplane:~# kubectl create deployment hr-web-app --image=kodekloud/webapp-color --replicas=2
+deployment.apps/hr-web-app created
+root@controlplane:~# kubectl get deployments.apps 
+NAME         READY   UP-TO-DATE   AVAILABLE   AGE
+hr-web-app   0/2     2            0           11s
+root@controlplane:~# 
+
+root@controlplane:~# kubectl get nodes -o jsonpath='{.items[*].status.nodeInfo.osImage}'
+Ubuntu 18.04.5 LTSroot@controlplane:~#
+
+root@controlplane:~# kubectl get nodes -o jsonpath='{.items[*].status.nodeInfo}'
+{"architecture":"amd64","bootID":"6849e2c0-e35d-4011-afac-cba044232505","containerRuntimeVersion":"docker://19.3.0","kernelVersion":"5.4.0-1044-gcp","kubeProxyVersion":"v1.20.0","kubeletVersion":"v1.20.0","machineID":"4728bdd8508642dcb1a335cb42879705","operatingSystem":"linux","osImage":"Ubuntu 18.04.5 LTS","systemUUID":"1ec98359-3f82-00ba-e8b3-27fabae23592"}
+
+root@controlplane:~# kubectl get nodes -o jsonpath='{.items[*].status.nodeInfo.osImage}'
+Ubuntu 18.04.5 LTS
+
+root@controlplane:~# kubectl get nodes -o jsonpath='{.items[*].status.nodeInfo.osImage}' > /opt/outputs/nodes_os_x43kj56.txt
+root@controlplane:~# 
+
+####
+
+root@controlplane:~# kubectl get nodes -o jsonpath='{.items[*].status.nodeInfo.osImage}'
+Ubuntu 18.04.5 LTSroot@controlplane:~# kubectl get nodes -o jsonpath='{.items[*].status.nodeInfo.osImage}' > /opt/outputs/nodes_os_x43kj56.txt
+root@controlplane:~# cat /opt/outputs/nodes_os_x43kj56.txt
+Ubuntu 18.04.5 LTSroot@controlplane:~# 
+
+#####
+
+controlplane /etc/kubernetes/manifests ✖ k logs orange init-myservice 
+sh: sleeeep: not found
+
+controlplane /etc/kubernetes/manifests ➜ 
+
+controlplane /etc/kubernetes/manifests ➜  k edit pod orange 
+error: pods "orange" is invalid
+A copy of your changes has been stored to "/tmp/kubectl-edit-3735994279.yaml"
+error: Edit cancelled, no valid changes were saved.
+
+controlplane /etc/kubernetes/manifests ✖
+
+controlplane /etc/kubernetes/manifests ➜  k replace --force -f /tmp/kubectl-edit-3735994279.yaml
+pod "orange" deleted
+pod/orange replaced
+
+controlplane /etc/kubernetes/manifests ➜  k get pods orange 
+NAME     READY   STATUS    RESTARTS   AGE
+orange   1/1     Running   0          91s
+
+controlplane /etc/kubernetes/manifests ➜  

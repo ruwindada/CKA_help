@@ -1,0 +1,1008 @@
+controlplane $ kubectl describe pod -n kube-system etcd-controlplane
+--advertise-client-urls=https://172.17.0.10:2379
+      --cert-file=/etc/kubernetes/pki/etcd/server.crt
+      --client-cert-auth=true
+      --data-dir=/var/lib/etcd
+      --initial-advertise-peer-urls=https://172.17.0.10:2380
+      --initial-cluster=controlplane=https://172.17.0.10:2380
+      --key-file=/etc/kubernetes/pki/etcd/server.key
+      --listen-client-urls=https://127.0.0.1:2379,https://172.17.0.10:2379
+      --listen-metrics-urls=http://127.0.0.1:2381
+      --listen-peer-urls=https://172.17.0.10:2380
+      --name=controlplane
+      --peer-cert-file=/etc/kubernetes/pki/etcd/peer.crt
+      --peer-client-cert-auth=true
+      --peer-key-file=/etc/kubernetes/pki/etcd/peer.key
+      --peer-trusted-ca-file=/etc/kubernetes/pki/etcd/ca.crt
+      --snapshot-count=10000
+      --trusted-ca-file=/etc/kubernetes/pki/etcd/ca.crt
+
+controlplane $ ETCDCTL_API=3 etcdctl snapshot save --cert="/etc/kubernetes/pki/etcd/peer.crt" --cacert="/etc/kubernetes/pki/etcd/server.crt" --key="/etc/kubernetes/pki/etcd/peer.key" /opt/etcd-backup.db
+{"level":"info","ts":1620767088.7930875,"caller":"snapshot/v3_snapshot.go:119","msg":"created temporary db file","path":"/opt/etcd-backup.db.part"}
+{"level":"info","ts":"2021-05-11T21:04:48.801Z","caller":"clientv3/maintenance.go:200","msg":"opened snapshot stream; downloading"}
+{"level":"info","ts":1620767088.8019407,"caller":"snapshot/v3_snapshot.go:127","msg":"fetching snapshot","endpoint":"127.0.0.1:2379"}
+{"level":"info","ts":"2021-05-11T21:04:48.839Z","caller":"clientv3/maintenance.go:208","msg":"completed snapshot read; closing"}
+{"level":"info","ts":1620767088.8642144,"caller":"snapshot/v3_snapshot.go:142","msg":"fetched snapshot","endpoint":"127.0.0.1:2379","size":"2.8 MB","took":0.071001216}
+{"level":"info","ts":1620767088.864329,"caller":"snapshot/v3_snapshot.go:152","msg":"saved","path":"/opt/etcd-backup.db"}
+Snapshot saved at /opt/etcd-backup.db
+controlplane $ ls -ldtrh /opt/etcd-backup.db
+-rw------- 1 root root 2.7M May 11 21:04 /opt/etcd-backup.db
+controlplane $ 
+##########
+
+Create a Pod called redis-storage with image: redis:alpine with a Volume of type emptyDir that lasts for the life of the Pod. Specs on the right.
+
+    Pod named 'redis-storage' created
+    Pod 'redis-storage' uses Volume type of emptyDir
+    Pod 'redis-storage' uses volumeMount with mountPath = /data/redis 
+
+controlplane $ kubectl run redis-storage --image=redis:alpine --dry-run=client -o yaml > redis-storage.yaml
+controlplane $ kubectl apply -f redis-storage.yaml 
+pod/redis-storage created
+controlplane $ cat redis-storage.yaml 
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  labels:
+    run: redis-storage
+  name: redis-storage
+spec:
+  containers:
+  - image: redis:alpine
+    name: redis-storage
+    volumeMounts:
+    - mountPath: /data/redis
+      name: cache-volume
+  volumes:
+  - name: cache-volume
+    emptyDir: {}
+controlplane $ 
+##########
+
+Create a new pod called super-user-pod with image busybox:1.28. 
+Allow the pod to be able to set system_time
+The container should sleep for 4800 seconds
+
+    Pod: super-user-pod
+    Container Image: busybox:1.28
+    SYS_TIME capabilities for the conatiner? 
+
+controlplane $ kubectl run super-user-pod --image=busybox:1.28 --command sleep 4800 --dry-run=client -o yaml > super-user-pod.yaml
+controlplane $ kubectl apply -f super-user-pod.yaml 
+pod/super-user-pod created
+controlplane $ cat super-user-pod.yaml 
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  labels:
+    run: super-user-pod
+  name: super-user-pod
+spec:
+  containers:
+  - command:
+    - sleep
+    - "4800"
+    image: busybox:1.28
+    name: super-user-pod
+    resources: {}
+  dnsPolicy: ClusterFirst
+  restartPolicy: Always
+status: {}
+controlplane $ kubectl get pods super-user-pod 
+NAME             READY   STATUS    RESTARTS   AGE
+super-user-pod   1/1     Running   0          17s
+controlplane $ 
+##########
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: security-context-demo-4
+spec:
+  containers:
+  - name: sec-ctx-4
+    image: gcr.io/google-samples/node-hello:1.0
+    command: ["sleep","4800"]
+    securityContext:
+      capabilities:
+        add: ["SYS_TIME"]
+
+Create the Pod:
+#kubectl apply -f https://k8s.io/examples/pods/security/security-context-4.yaml
+
+Get a shell into the running Container:
+#kubectl exec -it security-context-demo-4 -- sh
+##########
+
+  - command:
+    - etcd
+    - --advertise-client-urls=https://172.17.0.10:2379
+    - --cert-file=/etc/kubernetes/pki/etcd/server.crt				## --cert = server.crt
+    - --client-cert-auth=true
+    - --data-dir=/var/lib/etcd
+    - --initial-advertise-peer-urls=https://172.17.0.10:2380
+    - --initial-cluster=controlplane=https://172.17.0.10:2380
+    - --key-file=/etc/kubernetes/pki/etcd/server.key				## --key = server.key
+    - --listen-client-urls=https://127.0.0.1:2379,https://172.17.0.10:2379
+    - --listen-metrics-urls=http://127.0.0.1:2381
+    - --listen-peer-urls=https://172.17.0.10:2380
+    - --name=controlplane
+    - --peer-cert-file=/etc/kubernetes/pki/etcd/peer.crt
+    - --peer-client-cert-auth=true
+    - --peer-key-file=/etc/kubernetes/pki/etcd/peer.key
+    - --peer-trusted-ca-file=/etc/kubernetes/pki/etcd/ca.crt			## --cacert = ca.crt
+    - --snapshot-count=10000
+    - --trusted-ca-file=/etc/kubernetes/pki/etcd/ca.crt
+
+## From documentation ##
+
+ETCDCTL_API=3 etcdctl --endpoints=https://127.0.0.1:2379 \
+  --cacert=<trusted-ca-file> --cert=<cert-file> --key=<key-file> \
+  snapshot save <backup-file-location>
+
+where trusted-ca-file, cert-file and key-file can be obtained from the description of the etcd Pod.
+##########
+
+--endpoints=https://127.0.0.1:2379		-> --listen-client-urls / if you running from the same server where etcd installed, endpoints can be opt-out!
+
+--cacert=/etc/kubernetes/pki/etcd/ca.crt	-> --cacert=ca.crt
+--cert=/etc/kubernetes/pki/etcd/server.crt	-> --cert=server.crt
+--key=/etc/kubernetes/pki/etcd/server.key	-> --key=server.key
+
+controlplane $ ETCDCTL_API=3 etcdctl --endpoints=https://127.0.0.1:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key snapshot save /opt/etcd-backup.db
+{"level":"info","ts":1621391134.2486727,"caller":"snapshot/v3_snapshot.go:119","msg":"created temporary db file","path":"/opt/etcd-backup.db.part"}
+{"level":"info","ts":"2021-05-19T02:25:34.257Z","caller":"clientv3/maintenance.go:200","msg":"opened snapshot stream; downloading"}
+{"level":"info","ts":1621391134.2581682,"caller":"snapshot/v3_snapshot.go:127","msg":"fetching snapshot","endpoint":"https://127.0.0.1:2379"}
+{"level":"info","ts":"2021-05-19T02:25:34.301Z","caller":"clientv3/maintenance.go:208","msg":"completed snapshot read; closing"}
+{"level":"info","ts":1621391134.331876,"caller":"snapshot/v3_snapshot.go:142","msg":"fetched snapshot","endpoint":"https://127.0.0.1:2379","size":"2.5 MB","took":0.083050065}
+{"level":"info","ts":1621391134.332183,"caller":"snapshot/v3_snapshot.go:152","msg":"saved","path":"/opt/etcd-backup.db"}
+Snapshot saved at /opt/etcd-backup.db
+controlplane $ ETCDCTL_API=3 etcdctl snapshot status /opt/etcd-backup.db
+bf689b91, 8687, 1501, 2.5 MB
+controlplane $ 
+
+controlplane $ ETCDCTL_API=3 etcdctl snapshot restore /opt/etcd-backup.db --data-dir=/var/lib/etcd-from-bkp
+{"level":"info","ts":1621392281.8766208,"caller":"snapshot/v3_snapshot.go:296","msg":"restoring snapshot","path":"/opt/etcd-backup.db","wal-dir":"/var/lib/etcd-from-bkp/member/wal","data-dir":"/var/lib/etcd-from-bkp","snap-dir":"/var/lib/etcd-from-bkp/member/snap"}
+{"level":"info","ts":1621392281.932218,"caller":"mvcc/kvstore.go:380","msg":"restored last compact revision","meta-bucket-name":"meta","meta-bucket-name-key":"finishedCompactRev","restored-compact-revision":7601}
+{"level":"info","ts":1621392281.9515092,"caller":"membership/cluster.go:392","msg":"added member","cluster-id":"cdf818194e3a8c32","local-member-id":"0","added-peer-id":"8e9e05c52164694d","added-peer-peer-urls":["http://localhost:2380"]}
+{"level":"info","ts":1621392282.0700698,"caller":"snapshot/v3_snapshot.go:309","msg":"restored snapshot","path":"/opt/etcd-backup.db","wal-dir":"/var/lib/etcd-from-bkp/member/wal","data-dir":"/var/lib/etcd-from-bkp","snap-dir":"/var/lib/etcd-from-bkp/member/snap"}
+controlplane $ echo $?
+0
+controlplane $ ls -ldtrh /var/lib/etcd-from-bkp/*
+drwx------ 4 root root 4.0K May 19 02:44 /var/lib/etcd-from-bkp/member
+controlplane $ 
+
+controlplane $ pwd           
+/etc/kubernetes/manifests
+controlplane $ cat etcd.yaml | grep -i data-dir
+    - --data-dir=/var/lib/etcd			##this path is with in the container
+controlplane $ 
+
+ volumes:
+  - hostPath:
+      path: /etc/kubernetes/pki/etcd
+      type: DirectoryOrCreate
+    name: etcd-certs
+  - hostPath:
+      path: /var/lib/etcd_bkp_rest 		##host path need to updated with restored location!!
+      type: DirectoryOrCreate
+    name: etcd-data
+status: {}
+root@controlplane:/etc/kubernetes/manifests# cat etcd.yaml ^C
+root@controlplane:/etc/kubernetes/manifests# 
+
+##########
+
+root@controlplane:/etc/kubernetes/manifests# ETCDCTL_API=3 etcdctl snapshot save --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key /opt/snapshot-pre-boot.db
+Snapshot saved at /opt/snapshot-pre-boot.db
+root@controlplane:/etc/kubernetes/manifests# ETCDCTL_API=3 etcdctl snapshot status /opt/snapshot-pre-boot.db
+d9e8be83, 2201, 966, 1.9 MB
+root@controlplane:/etc/kubernetes/manifests# 
+
+root@controlplane:/etc/kubernetes/manifests# ETCDCTL_API=3 etcdctl snapshot restore /opt/snapshot-pre-boot.db --data-dir=/var/lib/etcd_bkp_rest
+##########
+
+controlplane $ ETCDCTL_API=3 etcdctl --endpoints=https://127.0.0.1:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key snapshot save /opt/etcd-backup.db
+{"level":"info","ts":1621440843.6046064,"caller":"snapshot/v3_snapshot.go:119","msg":"created temporary db file","path":"/opt/etcd-backup.db.part"}
+{"level":"info","ts":"2021-05-19T16:14:03.612Z","caller":"clientv3/maintenance.go:200","msg":"opened snapshot stream; downloading"}
+{"level":"info","ts":1621440843.613324,"caller":"snapshot/v3_snapshot.go:127","msg":"fetching snapshot","endpoint":"https://127.0.0.1:2379"}
+{"level":"info","ts":"2021-05-19T16:14:03.662Z","caller":"clientv3/maintenance.go:208","msg":"completed snapshot read; closing"}
+{"level":"info","ts":1621440843.7054317,"caller":"snapshot/v3_snapshot.go:142","msg":"fetched snapshot","endpoint":"https://127.0.0.1:2379","size":"2.9 MB","took":0.100756708}
+{"level":"info","ts":1621440843.705666,"caller":"snapshot/v3_snapshot.go:152","msg":"saved","path":"/opt/etcd-backup.db"}
+Snapshot saved at /opt/etcd-backup.db
+controlplane $ ls -ldtrh /opt/etcd-backup.db
+-rw------- 1 root root 2.8M May 19 16:14 /opt/etcd-backup.db
+controlplane $ ETCDCTL_API=3 etcdctl snapshot status /opt/etcd-backup.db
+f4ffaa99, 2083, 1386, 2.9 MB
+controlplane $ 
+
+controlplane $ kubectl run redis-storage --image=redis:alpine --dry-run=client -o yaml > redis-storage.yaml
+controlplane $ vim redis-storage.yaml 
+controlplane $ kubectl create -f redis-storage.yaml 
+pod/redis-storage created
+controlplane $ kubectl get pods
+NAME            READY   STATUS    RESTARTS   AGE
+redis-storage   1/1     Running   0          7s
+controlplane $ cat redis-storage.yaml 
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  labels:
+    run: redis-storage
+  name: redis-storage
+spec:
+  containers:
+  - image: redis:alpine
+    name: redis-storage
+    volumeMounts:
+    - mountPath: /data/redis
+      name: cache-volume
+  volumes:
+  - name: cache-volume
+    emptyDir: {}
+controlplane $ 
+
+controlplane $ kubectl run super-user-pod --image=busybox:1.28 --command sleep 4800 --dry-run=client -o yaml > super-user-pod.yaml
+controlplane $ vim super-user-pod.yaml 
+controlplane $ kubectl create -f super-user-pod.yaml 
+pod/super-user-pod created
+controlplane $ kubectl get pods
+NAME             READY   STATUS    RESTARTS   AGE
+redis-storage    1/1     Running   0          4m37s
+super-user-pod   1/1     Running   0          7s
+controlplane $ cat super-user-pod.yaml 
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  labels:
+    run: super-user-pod
+  name: super-user-pod
+spec:
+  containers:
+  - command:
+    - sleep
+    - "4800"
+    image: busybox:1.28
+    name: super-user-pod
+    securityContext:
+      capabilities:
+        add: ["SYS_TIME"]
+controlplane $ 
+
+root@controlplane:~# kubectl run webapp --image=kodekloud/event-simulator --dry-run=client -o yaml > webapp.yaml
+root@controlplane:~# kubectl delete pod webapp 
+pod "webapp" deleted
+root@controlplane:~# kubectl create -f webapp.yaml 
+pod/webapp created
+root@controlplane:~# cat webapp.yaml 
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  labels:
+    run: webapp
+  name: webapp
+spec:
+  containers:
+  - image: kodekloud/event-simulator
+    name: webapp
+    volumeMounts:
+    - mountPath: /log
+      name: log-volume
+  volumes:
+  - name: log-volume
+    hostPath:
+      path: /var/log/webapp
+      type: Directory
+root@controlplane:~# 
+
+root@controlplane:~# kubectl create -f pv.yaml 
+persistentvolume/pv-log created
+root@controlplane:~# kubectl get pv
+NAME     CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM   STORAGECLASS   REASON   AGE
+pv-log   100Mi      RWX            Retain           Available                                   9s
+root@controlplane:~# cat pv.yaml 
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-log
+spec:
+  capacity:
+    storage: 100Mi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  hostPath:
+    path: /pv/log
+root@controlplane:~# 
+
+####
+root@controlplane:~# kubectl explain PersistentVolume --recursive
+hostPath  <Object>
+         path   <string>
+         type   <string>
+
+root@controlplane:~# kubectl explain PersistentVolumeClaim --recursive
+####
+
+root@controlplane:~# kubectl create -f pvc.yaml 
+persistentvolumeclaim/claim-log-1 created
+root@controlplane:~# cat pvc.yaml 
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: claim-log-1
+spec:
+  accessModes:
+    - ReadWriteOnce
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 50Mi 
+root@controlplane:~# 
+
+root@controlplane:~# kubectl get pv,pvc
+NAME                      CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM   STORAGECLASS   REASON   AGE
+persistentvolume/pv-log   100Mi      RWX            Retain           Available                                   2m9s
+
+NAME                                STATUS    VOLUME   CAPACITY   ACCESS MODES   STORAGECLASS   AGE
+persistentvolumeclaim/claim-log-1   Pending                                                     9s
+root@controlplane:~#
+
+accessModes:
+    - ReadWriteMany
+
+root@controlplane:~# kubectl delete pvc claim-log-1 
+persistentvolumeclaim "claim-log-1" deleted
+root@controlplane:~# kubectl create -f pvc.yaml 
+persistentvolumeclaim/claim-log-1 created
+root@controlplane:~# kubectl get pv,pvc
+NAME                      CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM                 STORAGECLASS   REASON   AGE
+persistentvolume/pv-log   100Mi      RWX            Retain           Bound    default/claim-log-1                           3m55s
+
+NAME                                STATUS   VOLUME   CAPACITY   ACCESS MODES   STORAGECLASS   AGE
+persistentvolumeclaim/claim-log-1   Bound    pv-log   100Mi      RWX                           4s
+root@controlplane:~# 
+
+root@controlplane:~# kubectl delete pod webapp 
+pod "webapp" deleted
+root@controlplane:~# cat webapp.yaml 
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  labels:
+    run: webapp
+  name: webapp
+spec:
+  containers:
+  - image: kodekloud/event-simulator
+    name: webapp
+    volumeMounts:
+    - mountPath: /log
+      name: log-volume
+  volumes:
+  - name: log-volume			##hostPath removed and used created pvc instead.
+    persistentVolumeClaim:
+        claimName: claim-log-1 
+root@controlplane:~# kubectl create -f webapp.yaml 
+pod/webapp created
+root@controlplane:~# kubectl get pod,pv,pvc
+NAME         READY   STATUS    RESTARTS   AGE
+pod/webapp   1/1     Running   0          14s
+
+NAME                      CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM                 STORAGECLASS   REASON   AGE
+persistentvolume/pv-log   100Mi      RWX            Retain           Bound    default/claim-log-1                           9m34s
+
+NAME                                STATUS   VOLUME   CAPACITY   ACCESS MODES   STORAGECLASS   AGE
+persistentvolumeclaim/claim-log-1   Bound    pv-log   100Mi      RWX                           5m43s
+root@controlplane:~# 
+
+root@controlplane:~# kubectl delete pod webapp	##pv STATUS = Released! 	
+pod "webapp" deleted
+root@controlplane:~# kubectl get pod,pv,pvc
+NAME                      CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS     CLAIM                 STORAGECLASS   REASON   AGE
+persistentvolume/pv-log   100Mi      RWX            Retain           Released   default/claim-log-1                           14m
+root@controlplane:~# 
+
+ETCDCTL_API=3 etcdctl --endpoints=https://127.0.0.1:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key snapshot save /opt/etcd-backup.db
+
+## deployment rollout, update and record ##
+
+controlplane $ kubectl create deployment nginx-deploy --image=nginx:1.16 --replicas=1 --dry-run=client -o yaml > nginx-deploy.yaml
+controlplane $  
+controlplane $ kubectl apply -f nginx-deploy.yaml --record 
+deployment.apps/nginx-deploy created
+controlplane $ kubectl get deployments.apps 
+NAME           READY   UP-TO-DATE   AVAILABLE   AGE
+nginx-deploy   1/1     1            1           20s
+controlplane $
+controlplane $ kubectl rollout history deployment nginx-deploy 
+deployment.apps/nginx-deploy 
+REVISION  CHANGE-CAUSE
+1         kubectl apply --filename=nginx-deploy.yaml --record=true
+
+controlplane $ 
+
+controlplane $ kubectl set image deployment/nginx-deploy nginx=nginx:1.17 --record
+deployment.apps/nginx-deploy image updated
+controlplane $ kubectl get deployments.apps -o wide
+NAME           READY   UP-TO-DATE   AVAILABLE   AGE   CONTAINERS   IMAGES       SELECTOR
+nginx-deploy   1/1     1            1           12m   nginx        nginx:1.17   app=nginx-deploy
+controlplane $ 
+
+controlplane $ kubectl rollout history deployment nginx-deploy 
+deployment.apps/nginx-deploy 
+REVISION  CHANGE-CAUSE
+1         kubectl apply --filename=nginx-deploy.yaml --record=true
+2         kubectl set image deployment/nginx-deploy nginx=nginx:1.17 --record=true
+
+controlplane $ 
+
+## CertificateSigningRequest ##
+
+controlplane $ cat john.csr | base64 | tr -d "\n"
+LS0tLS1CRUdJTiBDRVJUSUZJQ0FURSBSRVFVRVNULS0tLS0KTUlJQ1ZEQ0NBVHdDQVFBd0R6RU5NQXNHQTFVRUF3d0VhbTlvYmpDQ0FTSXdEUVlKS29aSWh2Y05BUUVCQlFBRApnZ0VQQURDQ0FRb0NnZ0VCQU1wWCtjbFFPZnY5dVd2L0JsNWNMWlBrMnZselljSkNidWZLYzhLbnV0ZDdPSTJYCnA1MElNMFRXVW5wekxiTGpmUThhZjhQbjNkRVpPK09KVmNLMXJhOTNSa0tmRFIwQU5BNHA2MkhBY0pna0lZUSsKRTIwZUxqMndFc3FHTlc0aDFJK0FXaWpTY3RrOEJSQUxDNDdJN2JlRlpsRFA5ZDhPemFOSFZtQUZwY29CS0FaRgpXNlJtRWNEWjliWXBEQy9NUTBTWEVXUHBBZHhJVXpMWmhXOU50M0FMV2tFdml0UEo4MGJtV1ZHZGg5R09RUFVsCklRTEtQOHVna245UHduMG9BTE9JR1V0aTRNRStWa1NxR2NxNmcvKzEzNm43UUYzTEZNeW95bkVDWjhRemdxa3oKRkNVSnZjaCt6bGo2QkRRbldHcEZiWml4K1ROTERvM2ZjSnlXcU1VQ0F3RUFBYUFBTUEwR0NTcUdTSWIzRFFFQgpDd1VBQTRJQkFRQ3VxYVpoSVZZTVk1REJNMjFoZjgyeFgrdlpqN1h2UlRwSm9wNHh1SzVGay9aU1d4bS9jcDNVClk5OFA3SHFLaHRjbmYrR3ZHZ2tYd08vL2RGVU9FU1UxQlE1T2dtWXhxaEw1SDlKK2g0dGV4M3lYazJoUTd0bjkKa2Z3UXNvY25XYjlYVkg0VUI3NC9Vd3B2UW5DQ2x5TzVPTG55cTRqa2o1aHVzdzBOSERiMzI0dFNRWTRqaWFVbgpyODZ5d1NxdFptUVBXTytZd1M4NDlPTzlTa1dRa0cxSUtyMm52cVlpeDByekFpQTJOT3FLT1czb1ozTmhtd1RhCjVLRlRTeE9WWEZvV05PSGpDZzNzWDh6OSsxbHVIWkIvRHo0RXY5MGlCMjhyTzBRZFVvRnEyMytidFQwZEMvM0QKQzlobElRL09PeTZ5R1o1R3llZDZjQmRoL1NIUjlIWXUKLS0tLS1FTkQgQ0VSVElGSUNBVEUgUkVRVUVTVC0tLS0tCg==controlplane$
+controlplane $ 
+controlplane $ vim john.yaml 
+controlplane $ 
+controlplane $ kubectl create -f john.yaml 
+certificatesigningrequest.certificates.k8s.io/john-developer created
+controlplane $ cat john.yaml 
+apiVersion: certificates.k8s.io/v1
+kind: CertificateSigningRequest
+metadata:
+  name: john-developer
+spec:
+  request:	##placing the csr is the most important (Note 2 x == last) LS0tLS1CRUdJTiBDRVJUSUZJQ0FURSBSRVFVRVNULS0tLS0KTUlJQ1ZEQ0NBVHdDQVFBd0R6RU5NQXNHQTFVRUF3d0VhbTlvYmpDQ0FTSXdEUVlKS29aSWh2Y05BUUVCQlFBRApnZ0VQQURDQ0FRb0NnZ0VCQU1wWCtjbFFPZnY5dVd2L0JsNWNMWlBrMnZselljSkNidWZLYzhLbnV0ZDdPSTJYCnA1MElNMFRXVW5wekxiTGpmUThhZjhQbjNkRVpPK09KVmNLMXJhOTNSa0tmRFIwQU5BNHA2MkhBY0pna0lZUSsKRTIwZUxqMndFc3FHTlc0aDFJK0FXaWpTY3RrOEJSQUxDNDdJN2JlRlpsRFA5ZDhPemFOSFZtQUZwY29CS0FaRgpXNlJtRWNEWjliWXBEQy9NUTBTWEVXUHBBZHhJVXpMWmhXOU50M0FMV2tFdml0UEo4MGJtV1ZHZGg5R09RUFVsCklRTEtQOHVna245UHduMG9BTE9JR1V0aTRNRStWa1NxR2NxNmcvKzEzNm43UUYzTEZNeW95bkVDWjhRemdxa3oKRkNVSnZjaCt6bGo2QkRRbldHcEZiWml4K1ROTERvM2ZjSnlXcU1VQ0F3RUFBYUFBTUEwR0NTcUdTSWIzRFFFQgpDd1VBQTRJQkFRQ3VxYVpoSVZZTVk1REJNMjFoZjgyeFgrdlpqN1h2UlRwSm9wNHh1SzVGay9aU1d4bS9jcDNVClk5OFA3SHFLaHRjbmYrR3ZHZ2tYd08vL2RGVU9FU1UxQlE1T2dtWXhxaEw1SDlKK2g0dGV4M3lYazJoUTd0bjkKa2Z3UXNvY25XYjlYVkg0VUI3NC9Vd3B2UW5DQ2x5TzVPTG55cTRqa2o1aHVzdzBOSERiMzI0dFNRWTRqaWFVbgpyODZ5d1NxdFptUVBXTytZd1M4NDlPTzlTa1dRa0cxSUtyMm52cVlpeDByekFpQTJOT3FLT1czb1ozTmhtd1RhCjVLRlRTeE9WWEZvV05PSGpDZzNzWDh6OSsxbHVIWkIvRHo0RXY5MGlCMjhyTzBRZFVvRnEyMytidFQwZEMvM0QKQzlobElRL09PeTZ5R1o1R3llZDZjQmRoL1NIUjlIWXUKLS0tLS1FTkQgQ0VSVElGSUNBVEUgUkVRVUVTVC0tLS0tCg==
+  signerName: kubernetes.io/kube-apiserver-client
+  usages:
+  - client auth
+controlplane $ 
+
+controlplane $ kubectl get csr
+NAME             AGE     SIGNERNAME                                    REQUESTOR                  CONDITION
+csr-fm72m        98m     kubernetes.io/kube-apiserver-client-kubelet   system:bootstrap:96771a    Approved,Issued
+csr-tmmhd        98m     kubernetes.io/kube-apiserver-client-kubelet   system:node:controlplane   Approved,Issued
+john-developer   3m40s   kubernetes.io/kube-apiserver-client           kubernetes-admin           Pending
+controlplane $ kubectl certificate approve john-developer
+certificatesigningrequest.certificates.k8s.io/john-developer approved
+controlplane $ kubectl get csr
+NAME             AGE     SIGNERNAME                                    REQUESTOR                  CONDITION
+csr-fm72m        99m     kubernetes.io/kube-apiserver-client-kubelet   system:bootstrap:96771a    Approved,Issued
+csr-tmmhd        99m     kubernetes.io/kube-apiserver-client-kubelet   system:node:controlplane   Approved,Issued
+john-developer   4m37s   kubernetes.io/kube-apiserver-client           kubernetes-admin           Approved,Issued
+controlplane $ 
+
+##########
+
+root@controlplane:~# kubectl config --kubeconfig=/root/my-kube-config current-context 
+test-user@development
+root@controlplane:~# kubectl config --kubeconfig=/root/my-kube-config                 
+current-context  delete-user      get-users        set-cluster      unset            
+delete-cluster   get-clusters     rename-context   set-context      use-context      
+delete-context   get-contexts     set              set-credentials  view             
+root@controlplane:~# kubectl config --kubeconfig=/root/my-kube-config get-users 
+NAME
+aws-user
+dev-user
+test-user
+root@controlplane:~# kubectl config --kubeconfig=/root/my-kube-config get-clusters 
+NAME
+production
+development
+kubernetes-on-aws
+test-cluster-1
+root@controlplane:~# kubectl config --kubeconfig=/root/my-kube-config get-contexts 
+CURRENT   NAME                         CLUSTER             AUTHINFO    NAMESPACE
+          aws-user@kubernetes-on-aws   kubernetes-on-aws   aws-user    
+          research                     test-cluster-1      dev-user    
+*         test-user@development        development         test-user   
+          test-user@production         production          test-user   
+root@controlplane:~#
+
+root@controlplane:~# kubectl config --kubeconfig=my-kube-config view | grep -i aws-user
+    user: aws-user
+  name: aws-user@kubernetes-on-aws
+- name: aws-user
+    client-certificate: /etc/kubernetes/pki/users/aws-user/aws-user.crt
+    client-key: /etc/kubernetes/pki/users/aws-user/aws-user.key
+root@controlplane:~# kubectl config --kubeconfig=my-kube-config view | grep -i current 
+current-context: test-user@development
+root@controlplane:~# kubectl config --kubeconfig=my-kube-config current-context       
+test-user@development
+root@controlplane:~# 
+
+root@controlplane:~# kubectl config --kubeconfig=my-kube-config use-context research
+Switched to context "research".
+root@controlplane:~# kubectl config --kubeconfig=my-kube-config current-context 
+research
+root@controlplane:~# kubectl config --kubeconfig=my-kube-config view | grep -i current
+current-context: research
+root@controlplane:~# 
+
+root@controlplane:~# kubectl config --kubeconfig=my-kube-config     
+current-context  delete-context   get-clusters     get-users        set              set-context      unset            view             
+delete-cluster   delete-user      get-contexts     rename-context   set-cluster      set-credentials  use-context      
+root@controlplane:~/.kube# ls
+cache  config
+root@controlplane:~/.kube# 
+root@controlplane:~/.kube# 
+root@controlplane:~/.kube# kubectl config get-clusters 
+NAME
+kubernetes
+root@controlplane:~/.kube# kubectl config get-users 
+NAME
+kubernetes-admin
+root@controlplane:~/.kube# kubectl config get-contexts 
+CURRENT   NAME                          CLUSTER      AUTHINFO           NAMESPACE
+*         kubernetes-admin@kubernetes   kubernetes   kubernetes-admin   
+root@controlplane:~/.kube# kubectl config current-context 
+kubernetes-admin@kubernetes	##user in current-context=kubernetes-admin , cluster in current-context=kubernetes
+root@controlplane:~/.kube# 
+
+controlplane $ kubectl create role developer --resource=pods --verb=create,list,get,update,delete --namespace=development 
+role.rbac.authorization.k8s.io/developer created
+controlplane $
+controlplane $ kubectl get roles.rbac.authorization.k8s.io --namespace development           
+NAME        CREATED AT
+developer   2021-05-24T16:24:13Z
+controlplane $
+
+controlplane $ kubectl describe roles.rbac.authorization.k8s.io --namespace development developer 
+Name:         developer
+Labels:       <none>
+Annotations:  <none>
+PolicyRule:
+  Resources  Non-Resource URLs  Resource Names  Verbs
+  ---------  -----------------  --------------  -----
+  pods       []                 []              [create list get update delete]
+controlplane $ 
+
+controlplane $ kubectl create rolebinding developer-role-binding --role=developer --user=john --namespace=development
+rolebinding.rbac.authorization.k8s.io/developer-role-binding created
+
+controlplane $ kubectl auth can-i watch pods --as john --namespace=development 
+no
+controlplane $ kubectl auth can-i update pods --as john --namespace=development 
+yes
+controlplane $
+
+## expose pod ##
+
+controlplane $ kubectl run nginx-resolver --image=nginx
+pod/nginx-resolver created
+controlplane $
+controlplane $ kubectl expose pod nginx-resolver --name=nginx-resolver-service --port=80 --target-port=80 --type=ClusterIP
+service/nginx-resolver-service exposed
+controlplane $ 
+
+controlplane $ kubectl describe svc nginx-resolver-service 
+Name:              nginx-resolver-service
+Namespace:         default
+Labels:            run=nginx-resolver
+Annotations:       <none>
+Selector:          run=nginx-resolver
+Type:              ClusterIP
+IP:                10.103.142.49
+Port:              <unset>  80/TCP
+TargetPort:        80/TCP
+Endpoints:         10.244.1.4:80
+Session Affinity:  None
+Events:            <none>
+controlplane $ kubectl get pods -o wide
+NAME             READY   STATUS    RESTARTS   AGE     IP           NODE     NOMINATED NODE   READINESS GATES
+nginx-resolver   1/1     Running   0          2m37s   10.244.1.4   node01   <none>           <none>
+controlplane $ 
+
+controlplane $ kubectl run dns-test --image=busybox:1.28 --rm -it -- nslookup nginx-resolver-service
+pod "dns-test" deleted
+error: timed out waiting for the condition	
+controlplane $ kubectl run dns-test --image=busybox:1.28 --rm -it -- nslookup 10-244-1-4.default.pod
+pod "dns-test" deleted
+error: timed out waiting for the condition
+controlplane $ 
+
+## 06/jun/2021 ##
+ETCDCTL_API=3 etcdctl --endpoints=https://127.0.0.1:2379 \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key \
+  snapshot save /opt/etcd-backup.db
+
+controlplane $ kubectl run nginx-resolver --image=nginx
+pod/nginx-resolver created
+controlplane $
+controlplane $ kubectl expose pod nginx-resolver --name=nginx-resolver-service --port=80 --target-port=80 --type=ClusterIP
+service/nginx-resolver-service exposed
+controlplane $ kubectl get svc
+NAME                     TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)   AGE
+kubernetes               ClusterIP   10.96.0.1       <none>        443/TCP   15m
+nginx-resolver           ClusterIP   10.109.170.60   <none>        80/TCP    8m39s
+nginx-resolver-service   ClusterIP   10.102.245.4    <none>        80/TCP    23s
+controlplane $ kubectl describe svc nginx-resolver-service 
+Name:              nginx-resolver-service
+Namespace:         default
+Labels:            run=nginx-resolver
+Annotations:       <none>
+Selector:          run=nginx-resolver
+Type:              ClusterIP
+IP:                10.102.245.4		##IP address of the service
+Port:              <unset>  80/TCP
+TargetPort:        80/TCP
+Endpoints:         10.244.1.2:80	##IP address of the pod
+Session Affinity:  None
+Events:            <none>
+controlplane $ 
+
+controlplane $ kubectl get pod -o wide
+NAME             READY   STATUS    RESTARTS   AGE   IP           NODE     NOMINATED NODE   READINESS GATES
+nginx-resolver   1/1     Running   0          11m   10.244.1.2   node01   <none>           <none>
+controlplane $
+controlplane $ kubectl get svc nginx-resolver-service -o wide
+NAME                     TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)   AGE     SELECTOR
+nginx-resolver-service   ClusterIP   10.102.245.4   <none>        80/TCP    3m45s   run=nginx-resolver
+controlplane $ 
+
+controlplane $ kubectl run dns-test1 --image=busybox:1.28 --rm -it -- nslookup nginx-resolver-service
+pod "dns-test1" deleted
+error: timed out waiting for the condition
+controlplane $ kubectl run dns-test1 --image=busybox:1.28 --rm -it -- nslookup 10-244-1-2.default.pod 
+pod "dns-test1" deleted
+error: timed out waiting for the condition
+controlplane $ 
+
+root@node01:/etc/kubernetes/manifests# kubectl get pods
+NAME             READY   STATUS    RESTARTS   AGE
+nginx-resolver   1/1     Running   2          33m
+root@node01:/etc/kubernetes/manifests# kubectl run nginx-critical --image=nginx --dry-run=client -o yaml > nginx-critical.yaml
+root@node01:/etc/kubernetes/manifests# ls
+nginx-critical.yaml
+root@node01:/etc/kubernetes/manifests# kubectl create -f nginx-critical.yaml 
+pod/nginx-critical created
+root@node01:/etc/kubernetes/manifests# kubectl get pods
+NAME                    READY   STATUS    RESTARTS   AGE
+nginx-critical          1/1     Running   0          5s
+nginx-critical-node01   1/1     Running   0          25s
+nginx-resolver          1/1     Running   2          34m
+root@node01:/etc/kubernetes/manifests#
+
+ETCDCTL_API=3 etcdctl --endpoints=https://127.0.0.1:2379 \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key \
+  snapshot save /opt/etcd-backup.db
+
+## 16jun2021 ##
+
+ETCDCTL_API=3 etcdctl --endpoints=https://127.0.0.1:2379 \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key \
+  snapshot save /opt/etcd-backup.db
+
+ETCDCTL_API=3 etcdctl snapshot status /opt/etcd-backup.db
+
+ETCDCTL_API=3 etcdctl snapshot restore /opt/snapshot-pre-boot.db --data-dir=/var/lib/etcd-from-backup
+
+  - hostPath:
+      path: /var/lib/etcd-from-backup	##update the hostPath with restored path
+      type: DirectoryOrCreate
+    name: etcd-data
+status: {}
+root@controlplane:~# cat /etc/kubernetes/manifests/etcd.yaml^C
+root@controlplane:~#
+
+controlplane $ kubectl apply -f john.yaml 
+certificatesigningrequest.certificates.k8s.io/john-developer created
+controlplane $ kubectl get csr
+NAME             AGE   SIGNERNAME                                    REQUESTOR                  CONDITION
+csr-hsjbp        52m   kubernetes.io/kube-apiserver-client-kubelet   system:bootstrap:96771a    Approved,Issued
+csr-zf7q7        52m   kubernetes.io/kube-apiserver-client-kubelet   system:node:controlplane   Approved,Issued
+john-developer   5s    kubernetes.io/kube-apiserver-client           kubernetes-admin           Pending
+controlplane $ kubectl certificate approve john-developer
+certificatesigningrequest.certificates.k8s.io/john-developer approved
+controlplane $ kubectl get csr
+NAME             AGE   SIGNERNAME                                    REQUESTOR                  CONDITION
+csr-hsjbp        52m   kubernetes.io/kube-apiserver-client-kubelet   system:bootstrap:96771a    Approved,Issued
+csr-zf7q7        53m   kubernetes.io/kube-apiserver-client-kubelet   system:node:controlplane   Approved,Issued
+john-developer   36s   kubernetes.io/kube-apiserver-client           kubernetes-admin           Approved,Issued
+controlplane $ kubectl create role developer -n development --resource=pods --verb=create,list,get,update,delete
+role.rbac.authorization.k8s.io/developer created
+controlplane $ kubectl create rolebinding developer-role-binding --role=developer --user=john
+rolebinding.rbac.authorization.k8s.io/developer-role-binding created
+controlplane $ kubectl auth can-i update pod -n development --as=john
+no
+controlplane $
+controlplane $ kubectl delete rolebindings.rbac.authorization.k8s.io developer-role-binding 
+rolebinding.rbac.authorization.k8s.io "developer-role-binding" deleted
+controlplane $
+controlplane $ kubectl create rolebinding developer-role-binding --role=developer -n development --user=john
+rolebinding.rbac.authorization.k8s.io/developer-role-binding created
+controlplane $ 
+controlplane $ kubectl describe role -n development developer 
+Name:         developer
+Labels:       <none>
+Annotations:  <none>
+PolicyRule:
+  Resources  Non-Resource URLs  Resource Names  Verbs
+  ---------  -----------------  --------------  -----
+  pods       []                 []              [create list get update delete]
+controlplane $ kubectl describe rolebindings.rbac.authorization.k8s.io -n development developer-role-binding 
+Name:         developer-role-binding
+Labels:       <none>
+Annotations:  <none>
+Role:
+  Kind:  Role
+  Name:  developer
+Subjects:
+  Kind  Name  Namespace
+  ----  ----  ---------
+  User  john  
+controlplane $ 
+controlplane $ kubectl auth can-i update pod -n development 
+yes
+controlplane $ kubectl auth can-i update pod -n development --as=john
+yes
+controlplane $ kubectl auth can-i create pod -n development --as=john
+yes
+controlplane $ kubectl auth can-i delete pod -n development --as=john
+yes
+controlplane $ kubectl auth can-i list pod -n development --as=john
+yes
+controlplane $ kubectl auth can-i get pod -n development --as=john
+yes
+controlplane $ kubectl auth can-i watch pod -n development --as=john
+no
+controlplane $ 
+
+## 24Jun2021 ##
+
+ETCDCTL_API=3 etcdctl --endpoints=https://127.0.0.1:2379 \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key \
+  snapshot save /opt/etcd-backup.db
+
+ETCDCTL_API=3 etcdctl snapshot status /opt/etcd-backup.db
+
+ETCDCTL_API=3 etcdctl snapshot restore --data-dir=
+
+## 14Oct2021 ##
+
+ETCDCTL_API=3 etcdctl --endpoints=https://127.0.0.1:2379 \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key \
+  snapshot save /opt/etcd-backup.db
+  
+root@controlplane:~# ETCDCTL_API=3 etcdctl --endpoints=https://127.0.0.1:2379 \
+>   --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key \
+>   snapshot save /opt/etcd-backup.db
+Snapshot saved at /opt/etcd-backup.db
+root@controlplane:~# 
+
+root@controlplane:~# ETCDCTL_API=3 etcdctl snapshot status /opt/etcd-backup.db
+d4912b38, 3392, 937, 2.3 MB
+root@controlplane:~# 
+
+ETCDCTL_API=3 etcdctl -h 
+
+ETCDCTL_API=3 etcdctl --endpoints=https://127.0.0.1:2379 \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key \
+  snapshot save /opt/etcd-backup.db
+  
+root@controlplane:~# ETCDCTL_API=3 etcdctl --endpoints=https://127.0.0.1:2379 \
+>   --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key \
+>   snapshot save /opt/etcd-backup.db
+Snapshot saved at /opt/etcd-backup.db
+root@controlplane:~# ETCDCTL_API=3 etcdctl snapshot status /opt/etcd-backup.db
+df7b1c66, 4540, 893, 2.4 MB
+root@controlplane:~#
+
+root@controlplane:~/CKA# cat use-pv.yaml 
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  labels:
+    run: use-pv
+  name: use-pv
+spec:
+  containers:
+  - image: nginx
+    name: use-pv
+    resources: {}
+  dnsPolicy: ClusterFirst
+  restartPolicy: Always
+status: {}
+root@controlplane:~/CKA# kubectl get pv
+NAME   CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM   STORAGECLASS   REASON   AGE
+pv-1   10Mi       RWO            Retain           Available                                   27m	##pv already available with RWO / 10Mi
+root@controlplane:~/CKA#
+
+root@controlplane:~/CKA# cat pvc.yaml 
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: my-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce					##Access mode updated
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 10Mi					##Capacity updated
+root@controlplane:~/CKA# 
+
+root@controlplane:~/CKA# kubectl apply -f pvc.yaml 
+persistentvolumeclaim/my-pvc created			##pvc created
+root@controlplane:~/CKA# kubectl get pv
+NAME   CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM            STORAGECLASS   REASON   AGE
+pv-1   10Mi       RWO            Retain           Bound    default/my-pvc                           29m		##pv on Bound state
+root@controlplane:~/CKA#
+
+root@controlplane:~/CKA# cat use-pv.yaml 
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  labels:
+    run: use-pv
+  name: use-pv
+spec:
+  containers:
+  - image: nginx
+    name: use-pv
+    volumeMounts:
+      - mountPath: "/data"				##pod mountPath updated
+        name: mypd
+  volumes:
+    - name: mypd
+      persistentVolumeClaim:
+        claimName: my-pvc				##pvc in pod 
+root@controlplane:~/CKA# 
+
+root@controlplane:~/CKA# kubectl apply -f use-pv.yaml 
+pod/use-pv created					##pod created with pvc
+root@controlplane:~/CKA#
+
+root@controlplane:~/CKA# kubectl describe pod use-pv 
+..
+...
+Volumes:
+  mypd:
+    Type:       PersistentVolumeClaim (a reference to a PersistentVolumeClaim in the same namespace)
+    ClaimName:  my-pvc		##verify pvc name in pod config
+    ReadOnly:   false
+  default-token-xvb7g:
+    Type:        Secret (a volume populated by a Secret)
+    SecretName:  default-token-xvb7g
+    Optional:    false
+    ..
+    ...
+root@controlplane:~/CKA#
+##########
+
+root@controlplane:~# kubectl run nginx-resolver --image=nginx
+pod/nginx-resolver created
+root@controlplane:~# kubectl expose pod nginx-resolver --name=nginx-resolver-service --port=80 --target-port=80
+service/nginx-resolver-service exposed
+root@controlplane:~# kubectl get pods -o wide                         
+NAME             READY   STATUS    RESTARTS   AGE     IP            NODE     NOMINATED NODE   READINESS GATES
+nginx-resolver   1/1     Running   0          2m18s   10.50.192.1   node01   <none>           <none>
+root@controlplane:~# kubectl describe svc nginx-resolver-service 
+Name:              nginx-resolver-service
+Namespace:         default
+Labels:            run=nginx-resolver
+Annotations:       <none>
+Selector:          run=nginx-resolver
+Type:              ClusterIP
+IP Families:       <none>
+IP:                10.108.153.117
+IPs:               10.108.153.117
+Port:              <unset>  80/TCP
+TargetPort:        80/TCP
+Endpoints:         10.50.192.1:80
+Session Affinity:  None
+Events:            <none>
+root@controlplane:~# 
+
+root@controlplane:~# kubectl run dns-test --image=busybox:1.28 --rm -it -- nslookup nginx-resolver-service
+If you don't see a command prompt, try pressing enter.
+Error attaching, falling back to logs: 
+Server:    10.96.0.10
+Address 1: 10.96.0.10 kube-dns.kube-system.svc.cluster.local
+
+Name:      nginx-resolver-service
+Address 1: 10.108.153.117 nginx-resolver-service.default.svc.cluster.local
+pod "dns-test" deleted
+root@controlplane:~# kubectl run dns-test1 --image=busybox:1.28 --rm -it -- nslookup 10-50-192-1.default.pod
+If you don't see a command prompt, try pressing enter.
+Error attaching, falling back to logs: 
+Server:    10.96.0.10
+Address 1: 10.96.0.10 kube-dns.kube-system.svc.cluster.local
+
+Name:      10-50-192-1.default.pod
+Address 1: 10.50.192.1 10-50-192-1.nginx-resolver-service.default.svc.cluster.local
+pod "dns-test1" deleted
+root@controlplane:~# 
+
+## Another way to dns;
+
+REF - Looks for "Debugging DNS Resolution" in docs 
+
+root@controlplane:~# kubectl apply -f https://k8s.io/examples/admin/dns/dnsutils.yaml
+pod/dnsutils created
+root@controlplane:~# kubectl exec dnsutils -it -- nslookup kubernetes.default
+Server:         10.96.0.10
+Address:        10.96.0.10#53
+
+Name:   kubernetes.default.svc.cluster.local
+Address: 10.96.0.1
+
+root@controlplane:~# kubectl exec dnsutils -it -- nslookup nginx-resolver-service
+Server:         10.96.0.10
+Address:        10.96.0.10#53
+
+Name:   nginx-resolver-service.default.svc.cluster.local
+Address: 10.103.25.104
+
+root@controlplane:~# 
+root@controlplane:~# kubectl exec dnsutils -it -- nslookup 10-50-192-1.default.pod
+Server:         10.96.0.10
+Address:        10.96.0.10#53
+
+Name:   10-50-192-1.default.pod.cluster.local
+Address: 10.50.192.1
+
+root@controlplane:~# 
+##########	
+
+ETCDCTL_API=3 etcdctl --endpoints=https://127.0.0.1:2379 \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key \
+  snapshot save /opt/etcd-backup.db
+root@controlplane:~# ETCDCTL_API=3 etcdctl --endpoints=https://127.0.0.1:2379   --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key   snapshot status /opt/etcd-backup.db
+5d1777ea, 924, 930, 1.7 MB
+root@controlplane:~#
+
+root@controlplane:~# ETCDCTL_API=3 etcdctl --endpoints=https://127.0.0.1:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key --data-dir /var/backups/ snapshot restore /opt/etcd-backup.db
+Error: data-dir "/var/backups/" exists
+
+root@controlplane:~# ETCDCTL_API=3 etcdctl --endpoints=https://127.0.0.1:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key --data-dir /var/backups/etcd_bkp_111021 snapshot restore /opt/etcd-backup.db
+2021-10-22 05:36:31.102662 I | etcdserver/membership: added member 8e9e05c52164694d [http://localhost:2380] to cluster cdf818194e3a8c32
+root@controlplane:~#
+
+##########
+
+root@controlplane:~# cat /var/lib/kubelet/config.yaml | grep -i static
+staticPodPath: /etc/kubernetes/manifests
+root@controlplane:~#
+
+root@node01:~# kubectl get pods 
+The connection to the server localhost:8080 was refused - did you specify the right host or port?
+root@node01:~# 
+
+root@controlplane:~/.kube# cd ..
+root@controlplane:~# scp -r .kube/ node01:/root
+root@controlplane:~# !ssh 
+ssh node01 
+Last login: Fri Oct 22 05:41:17 2021 from 10.7.51.4
+root@node01:~# kubectl get pods 
+No resources found in default namespace.
+root@node01:~# kubectl get nodes
+NAME           STATUS   ROLES                  AGE   VERSION
+controlplane   Ready    control-plane,master   12m   v1.20.0
+node01         Ready    <none>                 12m   v1.20.0
+root@node01:~#
+
+root@node01:/etc/kubernetes/manifests# kubectl run nginx-critical --image=nginx --dry-run=client -o yaml > nginx-critical.yaml
+root@node01:/etc/kubernetes/manifests# kubectl apply -f nginx-critical.yaml 
+pod/nginx-critical created
+root@node01:/etc/kubernetes/manifests# kubectl get pods 
+NAME                    READY   STATUS    RESTARTS   AGE
+nginx-critical-node01   1/1     Running   0          16s
+root@node01:/etc/kubernetes/manifests#
+##########
+
+ETCDCTL_API=3 etcdctl --endpoints=https://127.0.0.1:2379 \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key \
+  snapshot save /opt/etcd-backup.db
+root@controlplane ~ ✖ ETCDCTL_API=3 etcdctl snapshot status /opt/etcd-backup.db
+636dde9c, 2023, 1097, 2.4 MB
+

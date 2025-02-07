@@ -1,0 +1,2778 @@
+alias k=kubectl
+export do="--dry-run=client -o yaml"
+
+#To make vim use 2 spaces for a tab edit ~/.vimrc to contain:
+set autoindent 		##ai
+set tabstop=2		##ts=2
+set shiftwidth=2	##sw=2
+set expandtab		##et
+
+Or
+
+autocmd FileType yaml setlocal ai ts=2 sw=2 et
+
+## Pods ##
+
+$ kubectl get pods
+$ kubect run nginx --image=nginx
+$ kubectl delete pods nginx-7fb4fcb8d
+$ kubectl get pods | grep -i nginx | awk '{print $9}' | xargs kubectl delete pod
+$ kubectl get pods -o wide | awk '{print $1}' | grep -v NAME | xargs kubectl delete pod ##delete multiple pods at once!
+$ kubectl describe pod nginx-7fb4fcb8d
+$ kubectl get pods -o wide ##Get wide view - will show node information
+
+##########
+autocmd FileType yaml setlocal ai ts=2 sw=2 et
+##########
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: redis
+spec:
+  containers:
+  - name: redis
+  image: redis123
+
+:wq redis-pod.yaml
+
+##########
+$ kubectl create -f redis-pod.yaml
+$ kubectl edit pod redis	##Will open up pod definition file created by k8s / do the correction / change will get effect real-time
+$ kubectl get pods 		##Note 
+$ kubectl apply -f redis-pod.yaml	##correct yaml and reload
+**************************************************
+
+root@controlplane:~# ls -ldtrh /etc/systemd/system/* | grep -i kube*
+drwxr-xr-x 2 root root 4.0K Mar 14 02:43 /etc/systemd/system/kubelet.service.d	##only kubelet is configured as service in OS
+root@controlplane:~# systemctl status kubelet.service       
+● kubelet.service - kubelet: The Kubernetes Node Agent
+   Loaded: loaded (/lib/systemd/system/kubelet.service; enabled; vendor preset: enabled)
+  Drop-In: /etc/systemd/system/kubelet.service.d
+           └─10-kubeadm.conf
+   Active: active (running) since Sun 2021-06-20 08:57:13 UTC; 14min ago
+     Docs: https://kubernetes.io/docs/home/
+ Main PID: 5355 (kubelet)
+    Tasks: 43 (limit: 7372)
+   CGroup: /system.slice/kubelet.service
+           └─5355 /usr/bin/kubelet --bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf --co
+root@controlplane:~# 
+root@controlplane:~# ls -ldtrh /etc/kubernetes/manifests/*	##No scheduler present
+-rw------- 1 root root 3.3K Jun 20 08:55 /etc/kubernetes/manifests/kube-controller-manager.yaml
+-rw------- 1 root root 3.8K Jun 20 08:55 /etc/kubernetes/manifests/kube-apiserver.yaml
+-rw------- 1 root root 2.2K Jun 20 08:55 /etc/kubernetes/manifests/etcd.yaml
+root@controlplane:~# 
+root@controlplane:~# ls -ldtrh /etc/kubernetes/*          
+drwxr-xr-x 3 root root 4.0K Jun 20 08:54 /etc/kubernetes/pki
+-rw------- 1 root root 5.5K Jun 20 08:54 /etc/kubernetes/admin.conf
+-rw------- 1 root root 5.5K Jun 20 08:55 /etc/kubernetes/controller-manager.conf
+-rw------- 1 root root 5.5K Jun 20 08:55 /etc/kubernetes/scheduler.conf
+-rw------- 1 root root 1.9K Jun 20 08:57 /etc/kubernetes/kubelet.conf
+drwxr-xr-x 1 root root 4.0K Jun 20 09:02 /etc/kubernetes/manifests
+root@controlplane:~# kubectl get pods -o wide
+NAME    READY   STATUS    RESTARTS   AGE   IP       NODE     NOMINATED NODE   READINESS GATES
+nginx   0/1     Pending   0          11m   <none>   <none>   <none>           <none>		##pod in pending state
+root@controlplane:~#
+
+root@controlplane:~# cat nginx.yaml 
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+spec:
+  nodeName: node01	##Manually schedule the pod on node01  
+  containers:
+  -  image: nginx
+     name: nginx
+
+root@controlplane:~# kubectl get pods -o wide
+NAME    READY   STATUS    RESTARTS   AGE   IP           NODE     NOMINATED NODE   READINESS GATES
+nginx   1/1     Running   0          60s   10.244.1.2   node01   <none>           <none>
+root@controlplane:~# 
+
+## Labels and Selectors ##
+root@controlplane:~# kubectl get pods --selector env --show-labels 
+NAME          READY   STATUS    RESTARTS   AGE     LABELS
+app-1-4vptj   1/1     Running   0          6m47s   bu=finance,env=dev,tier=frontend
+app-1-5lwm8   1/1     Running   0          6m47s   bu=finance,env=dev,tier=frontend
+app-1-6k55p   1/1     Running   0          6m47s   bu=finance,env=dev,tier=frontend
+app-1-zzxdf   1/1     Running   0          6m46s   bu=finance,env=prod,tier=frontend
+app-2-hbp5h   1/1     Running   0          6m47s   env=prod,tier=frontend
+auth          1/1     Running   0          6m46s   bu=finance,env=prod
+db-1-79gbf    1/1     Running   0          6m47s   env=dev,tier=db
+db-1-9j9z6    1/1     Running   0          6m47s   env=dev,tier=db
+db-1-cxpqd    1/1     Running   0          6m46s   env=dev,tier=db
+db-1-kvzzz    1/1     Running   0          6m47s   env=dev,tier=db
+db-2-pdpbg    1/1     Running   0          6m46s   bu=finance,env=prod,tier=db
+root@controlplane:~#      
+root@controlplane:~# kubectl get pods --selector env=dev
+NAME          READY   STATUS    RESTARTS   AGE
+app-1-4vptj   1/1     Running   0          7m20s
+app-1-5lwm8   1/1     Running   0          7m20s
+app-1-6k55p   1/1     Running   0          7m20s
+db-1-79gbf    1/1     Running   0          7m20s
+db-1-9j9z6    1/1     Running   0          7m20s
+db-1-cxpqd    1/1     Running   0          7m19s
+db-1-kvzzz    1/1     Running   0          7m20s
+root@controlplane:~# kubectl get pods --selector env=prod
+NAME          READY   STATUS    RESTARTS   AGE
+app-1-zzxdf   1/1     Running   0          7m27s
+app-2-hbp5h   1/1     Running   0          7m28s
+auth          1/1     Running   0          7m27s
+db-2-pdpbg    1/1     Running   0          7m27s
+root@controlplane:~# 
+
+root@controlplane:~# kubectl get pods --selector bu=finance
+NAME          READY   STATUS    RESTARTS   AGE
+app-1-4vptj   1/1     Running   0          9m34s
+app-1-5lwm8   1/1     Running   0          9m34s
+app-1-6k55p   1/1     Running   0          9m34s
+app-1-zzxdf   1/1     Running   0          9m33s
+auth          1/1     Running   0          9m33s
+db-2-pdpbg    1/1     Running   0          9m33s
+root@controlplane:~# 
+
+root@controlplane:~# kubectl get all --selector env=prod	##All objects in Prod Env
+NAME              READY   STATUS    RESTARTS   AGE
+pod/app-1-zzxdf   1/1     Running   0          12m
+pod/app-2-hbp5h   1/1     Running   0          12m
+pod/auth          1/1     Running   0          12m
+pod/db-2-pdpbg    1/1     Running   0          12m
+
+NAME            TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
+service/app-1   ClusterIP   10.103.59.160   <none>        3306/TCP   12m
+
+NAME                    DESIRED   CURRENT   READY   AGE
+replicaset.apps/app-2   1         1         1       12m
+replicaset.apps/db-2    1         1         1       12m
+root@controlplane:~# 
+
+root@controlplane:~# kubectl get all --selector env=prod,bu=finance,tier=frontend
+NAME              READY   STATUS    RESTARTS   AGE
+pod/app-1-zzxdf   1/1     Running   0          14m
+root@controlplane:~# 
+
+root@controlplane:~# cat replicaset-definition-1.yaml 
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+   name: replicaset-1
+spec:
+   replicas: 2
+   selector:
+      matchLabels:
+        tier: frontend
+   template:
+     metadata:
+       labels:
+        tier: frontend
+     spec:
+       containers:
+       - name: nginx
+         image: nginx
+root@controlplane:~# 
+
+root@controlplane:~# kubectl get nodes node01 --show-labels 
+NAME     STATUS   ROLES    AGE   VERSION   LABELS
+node01   Ready    <none>   15m   v1.20.0   beta.kubernetes.io/arch=amd64,beta.kubernetes.io/os=linux,color=blue,kubernetes.io/arch=amd64,kubernetes.io/hostname=node01,kubernetes.io/os=linux
+root@controlplane:~# kubectl label nodes node01 color=blue^C
+root@controlplane:~# 
+
+## Taint and tolerations ##
+root@controlplane:~# kubectl describe node node01 | grep -i taint
+Taints:             spray=mortein:NoSchedule
+root@controlplane:~# cat bee.yaml 
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  labels:
+    run: bee
+  name: bee
+spec:
+  containers:
+  - image: nginx
+    name: bee
+    resources: {}
+  tolerations:
+  - key: "spray"
+    value: "mortein"
+    operator: "Equal"
+    effect: "NoSchedule"  
+root@controlplane:~# kubectl get pods -o wide
+NAME       READY   STATUS    RESTARTS   AGE     IP           NODE     NOMINATED NODE   READINESS GATES
+bee        1/1     Running   0          2m8s    10.244.1.2   node01   <none>           <none>
+mosquito   0/1     Pending   0          6m56s   <none>       <none>   <none>           <none>
+root@controlplane:~# 
+
+oot@controlplane:~# kubectl taint nodes controlplane node-role.kubernetes.io/master:NoSchedule-
+node/controlplane untainted
+root@controlplane:~# kubectl describe nodes controlplane | grep -i taint
+Taints:             <none>
+root@controlplane:~# 
+
+root@controlplane:~# kubectl get pods -o wide
+NAME       READY   STATUS    RESTARTS   AGE   IP           NODE           NOMINATED NODE   READINESS GATES
+bee        1/1     Running   0          23m   10.244.1.2   node01         <none>           <none>
+mosquito   1/1     Running   0          28m   10.244.0.4   controlplane   <none>           <none>
+root@controlplane:~# 
+
+## ReplicaSets ##
+$ kubectl get rs
+$ kubectl get replicaset
+$ kubectl describe rs replica-set-name
+$ kubectl get rs replica-set-name -o yaml > new-replica-set.yaml
+$ kubectl delete rs replica-set-name
+$ kubectl create -f new-replica-set.yaml
+controlplane ~ ✖ kubectl edit replicasets.apps new-replica-set	##Edit ReplicaSet and corrected image name
+replicaset.apps/new-replica-set edited
+
+controlplane ~ ✖ kubectl scale replicaset new-replica-set --replicas=5
+replicaset.apps/new-replica-set scaled
+
+## DaemonSets ##
+
+root@controlplane:~# kubectl get ds --all-namespaces
+NAMESPACE     NAME              DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE   NODE SELECTOR            AGE
+kube-system   kube-flannel-ds   1         1         1       1            1           <none>                   12m
+kube-system   kube-proxy        1         1         1       1            1           kubernetes.io/os=linux   12m
+root@controlplane:~# 
+
+root@controlplane:~# kubectl get DaemonSets --all-namespaces
+NAMESPACE     NAME              DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE   NODE SELECTOR            AGE
+kube-system   kube-flannel-ds   1         1         1       1            1           <none>                   14m
+kube-system   kube-proxy        1         1         1       1            1           kubernetes.io/os=linux   14m
+root@controlplane:~#
+
+root@controlplane:~# kubectl get ds -n kube-system 
+NAME              DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE   NODE SELECTOR            AGE
+kube-flannel-ds   1         1         1       1            1           <none>                   21m
+kube-proxy        1         1         1       1            1           kubernetes.io/os=linux   22m
+root@controlplane:~# kubectl get ds --all-namespaces
+NAMESPACE     NAME              DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE   NODE SELECTOR            AGE
+kube-system   kube-flannel-ds   1         1         1       1            1           <none>                   22m
+kube-system   kube-proxy        1         1         1       1            1           kubernetes.io/os=linux   22m
+root@controlplane:~# 
+root@controlplane:~# kubectl get pods --all-namespaces | grep -i kube-proxy
+kube-system   kube-proxy-sh6gj                       1/1     Running   0          23m
+root@controlplane:~#
+
+root@controlplane:~# kubectl -n kube-system describe ds kube-flannel-ds | grep -i image
+    Image:      quay.io/coreos/flannel:v0.13.1-rc1
+    Image:      quay.io/coreos/flannel:v0.13.1-rc1
+root@controlplane:~#
+
+root@controlplane:~# kubectl create deployment elasticsearch --image=k8s.gcr.io/fluentd-elasticsearch:1.20 --dry-run=client -o yaml > elasticsearch.yaml
+root@controlplane:~# kubectl apply -f elasticsearch.yaml 
+daemonset.apps/elasticsearch created
+root@controlplane:~# cat elasticsearch.yaml 
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  creationTimestamp: null
+  labels:
+    app: elasticsearch
+  name: elasticsearch
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: elasticsearch
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: elasticsearch
+    spec:
+      containers:
+      - image: k8s.gcr.io/fluentd-elasticsearch:1.20
+        name: fluentd-elasticsearch
+root@controlplane:~# kubectl get ds -n kube-system | grep -i elasticsearch
+elasticsearch     1         1         1       1            1           <none>                   87s
+root@controlplane:~# 
+
+root@controlplane:~# cat elasticsearch.yaml	##replicas and strategy not related to DaemonSet
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  labels:
+    app: elasticsearch
+  name: elasticsearch
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: elasticsearch
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: elasticsearch
+    spec:
+      containers:
+      - image: k8s.gcr.io/fluentd-elasticsearch:1.20
+        name: fluentd-elasticsearch
+root@controlplane:~# kubectl get daemonsets.apps -n kube-system 
+NAME              DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE   NODE SELECTOR            AGE
+elasticsearch     1         1         1       1            1           <none>                   3m25s
+kube-flannel-ds   1         1         1       1            1           <none>                   39m
+kube-proxy        1         1         1       1            1           kubernetes.io/os=linux   39m
+root@controlplane:~# 
+##################################################
+Certification Tip!
+
+As you might have seen already, it is a bit difficult to create and edit YAML files. Especially in the CLI. During the exam, you might find it difficult to copy and paste YAML files from browser to terminal.
+
+Use the below set of commands and try the previous practice tests again, but this time try to use the below commands instead of YAML files. Try to use these as much as you can going forward in all exercises
+
+Reference (Bookmark this page for exam. It will be very handy):
+https://kubernetes.io/docs/reference/kubectl/conventions/
+
+## Create an NGINX Pod
+$ kubectl run --generator=run-pod/v1 nginx --image=nginx
+
+## Generate POD Manifest YAML file (-o yaml). Don't create it(--dry-run)
+$ kubectl run --generator=run-pod/v1 nginx --image=nginx --dry-run -o yaml
+
+## Create a deployment
+$ kubectl create deployment --image=nginx nginx
+
+## Generate Deployment YAML file (-o yaml). Don't create it(--dry-run)
+$ kubectl create deployment --image=nginx nginx --dry-run -o yaml
+
+## Generate Deployment YAML file (-o yaml). Don't create it(--dry-run) with 4 Replicas (--replicas=4)
+$ kubectl create deployment --image=nginx nginx --dry-run -o yaml > nginx-deployment.yaml
+
+## Save it to a file, make necessary changes to the file (for example, adding more replicas) and then create the deployment.
+$ kubectl scale rs replica-set-name --replicas=5
+##################################################
+
+## Deployments ##
+ 
+$ kubectl get deployments
+$ kubectl describe deployments
+$ kubectl create -f deployment-definition-1.yaml
+$ kubectl create deployment httpd-frontend --image=httpd:2.4-alpine
+$ kubectl scale deployment httpd-frontend --replicas=3
+
+root@controlplane:~# kubectl create deployment blue --image=nginx 
+deployment.apps/blue created
+root@controlplane:~# kubectl scale deployment blue --replicas=3
+deployment.apps/blue scaled
+root@controlplane:~# kubectl get deployments.apps blue
+NAME   READY   UP-TO-DATE   AVAILABLE   AGE
+blue   3/3     3            3           38s
+root@controlplane:~#
+
+root@controlplane:~# kubectl get deployments.apps blue -o yaml > blue.yaml
+root@controlplane:~# vim blue.yaml 
+root@controlplane:~# kubectl delete deployments.apps blue 
+deployment.apps "blue" deleted
+root@controlplane:~# kubectl apply -f blue.yaml
+
+spec:
+      affinity:
+       nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+         nodeSelectorTerms:
+         - matchExpressions:
+           - key: color		##key
+             operator: In
+             values:
+             - blue		##value need to goes here, otherwise error thrown!!
+      containers:
+      - image: nginx
+        imagePullPolicy: Always
+        name: nginx
+#####
+Create a new deployment named red with the nginx image and 2 replicas, and ensure it gets placed on the master/controlplane node only.
+Use the label - node-role.kubernetes.io/master - set on the master/controlplane node.
+
+root@controlplane:~# kubectl create deployment red --image=nginx --replicas=2 --dry-run=client -o yaml > red.yaml
+
+spec:
+      affinity:
+       nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+         nodeSelectorTerms:
+         - matchExpressions:
+           - key: node-role.kubernetes.io/master
+             operator: Exists
+      containers:
+      - image: nginx
+        name: nginx
+
+root@controlplane:~# kubectl get pods -o wide 
+NAME                    READY   STATUS    RESTARTS   AGE    IP            NODE           NOMINATED NODE   READINESS GATES
+blue-566c768bd6-c5xgn   1/1     Running   0          6m6s   10.244.1.12   node01         <none>           <none>
+blue-566c768bd6-jf2bt   1/1     Running   0          6m6s   10.244.1.13   node01         <none>           <none>
+blue-566c768bd6-stsxg   1/1     Running   0          6m6s   10.244.1.11   node01         <none>           <none>
+red-5cbd45ccb6-425hj    1/1     Running   0          36s    10.244.0.4    controlplane   <none>           <none>
+red-5cbd45ccb6-nlp8v    1/1     Running   0          36s    10.244.0.5    controlplane   <none>           <none>
+root@controlplane:~#
+##################################################
+
+## Namespaces ##
+
+$ kubectl get ns
+$ kubectl get namespace
+$ kubectl get ns --no-headers
+$ kubectl -n research get pods
+$ kubectl get pods --namespace=research
+
+##################################################
+
+## Resources -> CPU/Memory ##
+root@controlplane:~# kubectl get pods elephant -o yaml > elephant.yaml
+    resources:
+      limits:
+        memory: 20Mi
+      requests:
+        memory: 15Mi
+
+##################################################
+
+## Labels ##
+root@controlplane:~# kubectl run redis --image=redis:alpine --labels=tier=db
+pod/redis created
+root@controlplane:~# kubectl get pods redis 
+NAME    READY   STATUS    RESTARTS   AGE
+redis   1/1     Running   0          17s
+root@controlplane:~# 
+
+root@controlplane:~# kubectl describe node node01 --show-events		##Look for Labels section
+root@controlplane:~# kubectl describe node node01			##Look for Labels section 
+
+root@controlplane:~# kubectl get nodes --show-labels
+NAME           STATUS   ROLES                  AGE   VERSION   LABELS
+controlplane   Ready    control-plane,master   21m   v1.20.0   beta.kubernetes.io/arch=amd64,beta.kubernetes.io/os=linux,kubernetes.io/arch=amd64,kubernetes.io/hostname=controlplane,kubernetes.io/os=linux,node-role.kubernetes.io/control-plane=,node-role.kubernetes.io/master=
+node01         Ready    <none>                 20m   v1.20.0   beta.kubernetes.io/arch=amd64,beta.kubernetes.io/os=linux,kubernetes.io/arch=amd64,kubernetes.io/hostname=node01,kubernetes.io/os=linux
+
+root@controlplane:~# kubectl get nodes node01 --show-labels
+NAME     STATUS   ROLES    AGE   VERSION   LABELS
+node01   Ready    <none>   20m   v1.20.0   beta.kubernetes.io/arch=amd64,beta.kubernetes.io/os=linux,kubernetes.io/arch=amd64,kubernetes.io/hostname=node01,kubernetes.io/os=linux
+
+root@controlplane:~# kubectl get pods --show-labels
+No resources found in default namespace.
+root@controlplane:~# 
+
+root@controlplane:~# kubectl label nodes node01 color=blue	##Apply a label
+node/node01 labeled
+root@controlplane:~# 
+
+root@controlplane:~# kubectl get nodes node01 --show-labels 
+NAME     STATUS   ROLES    AGE   VERSION   LABELS
+node01   Ready    <none>   13m   v1.20.0   beta.kubernetes.io/arch=amd64,beta.kubernetes.io/os=linux,color=blue,kubernetes.io/arch=amd64,kubernetes.io/hostname=node01,kubernetes.io/os=linux
+root@controlplane:~# 
+
+root@controlplane:~# kubectl label nodes node01 color-		##Remove a label       
+node/node01 labeled
+
+## Taint ##
+root@controlplane:~# kubectl describe nodes  node01 | grep -i taints
+Taints:             <none>
+root@controlplane:~# kubectl taint node node01  
+error: at least one taint update is required
+root@controlplane:~#
+root@controlplane:~# kubectl taint node node01 spray=mortein:NoSchedule
+node/node01 tainted
+root@controlplane:~# kubectl describe nodes  node01 | grep -i taints
+Taints:             spray=mortein:NoSchedule
+root@controlplane:~# 
+
+
+Certification Tips - Imperative Commands with Kubectl
+
+--dry-run: Simply to test your command, use the --dry-run=client option. This will not create the resource, instead, tell you whether the resource can be created
+-o yaml: This will output the resource definition in YAML format on the screen.
+
+## POD ## 
+## Create an NGINX Pod
+$ kubectl run nginx --image=nginx
+
+Generate POD Manifest YAML file (-o yaml). Don't create it(--dry-run)
+$ kubectl run nginx --image=nginx  --dry-run=client -o yaml
+
+## Deployment ##
+## Create a deployment
+$ kubectl create deployment --image=nginx nginx
+
+Generate Deployment YAML file (-o yaml). Don't create it(--dry-run)
+$ kubectl create deployment --image=nginx nginx --dry-run=client -o yaml
+
+IMPORTANT:
+
+kubectl create deployment does not have a --replicas option. You could first create it and then scale it using the kubectl scale command.
+Save it to a file - (If you need to modify or add some other details)
+$ kubectl create deployment --image=nginx nginx --dry-run=client -o yaml > nginx-deployment.yaml
+You can then update the YAML file with the replicas or any other field before creating the deployment.
+
+## Static Pods ##
+
+root@controlplane:~# ps -ef | grep -i kubelet | grep -i config
+root      4729     1  0 18:43 ?        00:04:15 /usr/bin/kubelet --bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf --config=/var/lib/kubelet/config.yaml --network-plugin=cni --pod-infra-container-image=k8s.gcr.io/pause:3.2
+
+root@controlplane:~# cat /var/lib/kubelet/config.yaml | grep -i static	##verify 'staticPodPath'
+staticPodPath: /etc/kubernetes/manifests
+root@controlplane:~# 
+
+root@controlplane:~# kubectl get pods --all-namespaces
+NAMESPACE     NAME                                   READY   STATUS    RESTARTS   AGE
+kube-system   coredns-74ff55c5b-9ws77                1/1     Running   0          4m25s
+kube-system   coredns-74ff55c5b-grc8k                1/1     Running   0          4m26s
+kube-system   etcd-controlplane                      1/1     Running   0          4m34s
+kube-system   kube-apiserver-controlplane            1/1     Running   0          4m34s
+kube-system   kube-controller-manager-controlplane   1/1     Running   0          4m34s
+kube-system   kube-flannel-ds-2nqmx                  1/1     Running   0          4m27s
+kube-system   kube-flannel-ds-5bxvw                  1/1     Running   0          3m27s
+kube-system   kube-proxy-k7nbk                       1/1     Running   0          4m27s
+kube-system   kube-proxy-w5zrs                       1/1     Running   0          3m27s
+kube-system   kube-scheduler-controlplane            1/1     Running   0          4m34s
+root@controlplane:~# ls -ldtrh /etc/kubernetes/manifests/*
+-rw------- 1 root root 3.3K May 11 05:43 /etc/kubernetes/manifests/kube-controller-manager.yaml
+-rw------- 1 root root 3.8K May 11 05:43 /etc/kubernetes/manifests/kube-apiserver.yaml
+-rw------- 1 root root 1.4K May 11 05:43 /etc/kubernetes/manifests/kube-scheduler.yaml
+-rw------- 1 root root 2.2K May 11 05:43 /etc/kubernetes/manifests/etcd.yaml
+root@controlplane:~#
+
+root@controlplane:/etc/kubernetes/manifests# pwd
+/etc/kubernetes/manifests
+root@controlplane:/etc/kubernetes/manifests# ls
+etcd.yaml  kube-apiserver.yaml  kube-controller-manager.yaml  kube-scheduler.yaml
+root@controlplane:/etc/kubernetes/manifests# kubectl run static-busybox --image=busybox --command sleep 1000 --dry-run=client --restart=Never -o yaml > static-busybox.yaml
+root@controlplane:/etc/kubernetes/manifests# ls -ldtrh *
+-rw------- 1 root root 3.3K May 11 05:43 kube-controller-manager.yaml
+-rw------- 1 root root 3.8K May 11 05:43 kube-apiserver.yaml
+-rw------- 1 root root 1.4K May 11 05:43 kube-scheduler.yaml
+-rw------- 1 root root 2.2K May 11 05:43 etcd.yaml
+-rw-r--r-- 1 root root  298 May 11 06:23 static-busybox.yaml		##static pod named 'static-busybox' created!! / pod name carry suffix from it's source
+root@controlplane:/etc/kubernetes/manifests# kubectl get pods		##in here it's placed in 'controlplane/master'
+NAME                          READY   STATUS    RESTARTS   AGE
+static-busybox-controlplane   1/1     Running   0          16s
+root@controlplane:/etc/kubernetes/manifests#
+
+root@controlplane:/etc/kubernetes/manifests# kubectl get nodes
+NAME           STATUS   ROLES                  AGE   VERSION
+controlplane   Ready    control-plane,master   40m   v1.20.0
+node01         Ready    <none>                 39m   v1.20.0
+root@controlplane:/etc/kubernetes/manifests# ssh node01
+root@node01:/etc/kubernetes/manifests# ls				##static pod can be placed in any of the nodes also!
+root@node01:/etc/kubernetes/manifests# 
+
+root@controlplane:/etc/kubernetes/manifests# cat static-busybox.yaml | grep -i image	
+    image: busybox:1.28.4 						##as soon as you bring in change to definition file, it get effect / no need apply!
+root@controlplane:/etc/kubernetes/manifests# kubectl get pods 
+NAME                          READY   STATUS    RESTARTS   AGE
+static-busybox-controlplane   1/1     Running   0          69s
+root@controlplane:/etc/kubernetes/manifests# 
+
+## /etc/kubernetes/manifests - can be altered!
+
+root@node01:/etc/kubernetes/manifests# ls
+root@node01:/etc/kubernetes/manifests# ps -ef | grep -i kubelet
+root     23753     1  0 06:31 ?        00:00:18 /usr/bin/kubelet --bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf --config=/var/lib/kubelet/config.yaml --network-plugin=cni --pod-infra-container-image=k8s.gcr.io/pause:3.2
+root     28544 26034  0 06:40 pts/0    00:00:00 grep --color=auto -i kubelet
+root@node01:/etc/kubernetes/manifests# vim /var/lib/kubelet/config.yaml
+root@node01:/etc/kubernetes/manifests# grep static /var/lib/kubelet/config.yaml
+staticPodPath: /etc/just-to-mess-with-you
+root@node01:/etc/kubernetes/manifests#
+root@node01:/etc/kubernetes/manifests# cd /etc/just-to-mess-with-you
+root@node01:/etc/just-to-mess-with-you# ls
+greenbox.yaml
+root@node01:/etc/just-to-mess-with-you# rm greenbox.yaml 
+root@node01:/etc/just-to-mess-with-you# kubectl get nodes
+The connection to the server localhost:8080 was refused - did you specify the right host or port?
+root@node01:/etc/just-to-mess-with-you# exit
+logout
+Connection to node01 closed.
+root@controlplane:~# kubectl get pods
+NAME                          READY   STATUS    RESTARTS   AGE
+static-busybox-controlplane   0/1     Error     0          13m
+static-greenbox-node01        1/1     Running   0          10m
+root@controlplane:~# kubectl get pods
+NAME                          READY   STATUS   RESTARTS   AGE
+static-busybox-controlplane   0/1     Error    0          13m
+root@controlplane:~# 
+
+## Service ##
+
+kubectl expose pod messaging --name messaging-service --port 6379 --target-port 6379
+
+root@controlplane:~# kubectl expose pod redis --name redis-service --port 6379 --target-port 6379
+service/redis-service exposed
+root@controlplane:~# kubectl get svc
+NAME            TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)    AGE
+kubernetes      ClusterIP   10.96.0.1        <none>        443/TCP    60m
+redis-service   ClusterIP   10.109.193.206   <none>        6379/TCP   15s
+root@controlplane:~# 
+
+root@controlplane:~# kubectl create deployment webapp --image=kodekloud/webapp-color --replicas=3
+deployment.apps/webapp created
+root@controlplane:~# kubectl get deployments.apps webapp 
+NAME     READY   UP-TO-DATE   AVAILABLE   AGE
+webapp   0/3     3            0           16s
+root@controlplane:~# kubectl scale deployment --replicas=3 webapp
+
+root@controlplane:~# kubectl run custom-nginx --image=nginx --port 8080
+
+root@controlplane:~# kubectl create deployment redis-deploy -n dev-ns --image=redis --replicas=2
+deployment.apps/redis-deploy created
+root@controlplane:~# 
+
+root@controlplane:~# kubectl run httpd --image=httpd:alpine --port 80 --expose --dry-run=client -o yaml
+
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+  selector:
+    run: httpd
+
+root@controlplane:~# kubectl run httpd --image=httpd:alpine --port 80 --expose
+service/httpd created
+pod/httpd created
+root@controlplane:~# kubectl get svc httpd; kubectl get pods httpd 
+NAME    TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)   AGE
+httpd   ClusterIP   10.103.250.25   <none>        80/TCP    28s
+NAME    READY   STATUS    RESTARTS   AGE
+httpd   1/1     Running   0          29s
+root@controlplane:~# 
+
+## Create a Service named redis-service of type ClusterIP to expose pod redis on port 6379
+$ kubectl expose pod redis --port=6379 --name redis-service --dry-run=client -o yaml
+
+(This will automatically use the pod's labels as selectors)
+
+Or
+
+$ kubectl create service clusterip redis --tcp=6379:6379 --dry-run=client -o yaml  
+
+(This will not use the pods labels as selectors, instead it will assume selectors as app=redis. 
+You cannot pass in selectors as an option. So it does not work very well if your pod has a different label set. 
+So generate the file and modify the selectors before creating the service)
+
+## Create a Service named nginx of type 
+
+ to expose pod nginx's port 80 on port 30080 on the nodes:
+$ kubectl expose pod nginx --port=80 --name nginx-service --type=NodePort --dry-run=client -o yaml
+
+(This will automatically use the pod's labels as selectors, but you cannot specify the node port. You have to generate a definition file and then add the node port in manually before creating the service with the pod.)
+
+Or 
+
+$ kubectl create service nodeport nginx --tcp=80:80 --node-port=30080 --dry-run=client -o yaml
+
+(This will not use the pods labels as selectors)
+Both the above commands have their own challenges. While one of it cannot accept a selector the other cannot accept a node port. 
+I would recommend going with the `kubectl expose` command. 
+If you need to specify a node port, generate a definition file using the same command and manually input the nodeport before creating the service.
+
+Reference:
+
+https://kubernetes.io/docs/reference/kubectl/conventions/
+##################################################
+
+## Services ##
+
+$ kubectl get services
+$ kubectl get svc
+$ kubectl describe svc service_name
+	<< Namespace, Labels, Type, IP, Port, TargetPort, Endpoints information available >>
+
+Create a new service to access the web application using the service-definition-1.yaml file
+Name: webapp-service; Type: NodePort; targetPort: 8080; port: 8080; nodePort: 30080; selector: simple-webapp
+$ kubectl expose deployment simple-webapp-deployment --type=NodePort --target-port=8080 --name=webapp-service --dry-run=client -o yaml > svc.yaml
+Note:- --dry-run is depricated and can be replaced with --dry-run=client
+
+REF - https://kubernetes.io/docs/concepts/services-networking/service/
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp-service
+spec:
+    ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+      nodePort: 30080		##nodePort need to include / It cannot be done via imperative command above.
+    selector:
+      name: simple-webapp
+    type: NodePort
+##################################################
+
+## Imperative Commands ##
+
+$ kubectl run nginx-pod --image=nginx:alpine --restart=Never
+$ kubectl run nginx-pod --image=nginx:alpine
+$ kubectl run redis --image=redis:alpine --restart=Never --labels=tier=db
+$ kubectl get pod redis --show-labels
+$ kubectl expose pod redis --name=redis-service --port=6379 --target-port=6379
+$ kubectl describe svc redis-service
+	Note:- Type=ClusterIP , Port , TargetPort
+
+$ kubectl create deployment webapp --image=kodekloud/webapp-color
+$ kubectl scale deployment webapp --replicas=3
+$ kubectl run custome-nginx --image=nginx --port=8080
+$ kubectl create namespace dev-ns
+$ kubectl create deployment redis-deploy --image=redis --namespace=dev-ns
+$ kubectl scale deployment redis-deploy --namespace=dev-ns --replicas=2
+##################################################
+
+root@controlplane:~# kubectl run webapp-green --image=kodekloud/webapp-color --dry-run -o yaml > pod.yaml
+W0430 06:57:43.773161   25960 helpers.go:553] --dry-run is deprecated and can be replaced with --dry-run=client.
+root@controlplane:~# kubectl run webapp-green --image=kodekloud/webapp-color --dry-run=client -o yaml > pod.yaml
+
+[ruwinda@gnuruwi ~]$ echo "root" | base64 
+cm9vdAo=
+[ruwinda@gnuruwi ~]$ echo "cm9vdAo=" | base64 -d
+root
+[ruwinda@gnuruwi ~]$ 
+##################################################
+
+## Storage - Volumes ##
+
+https://kubernetes.io/docs/concepts/storage/volumes/
+hostPath configuration example 
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pd
+spec:
+  containers:
+  - image: k8s.gcr.io/test-webserver
+    name: test-container
+    volumeMounts:
+    - mountPath: /log
+      name: log-volume
+  volumes:
+  - name: log-volume
+    hostPath:
+      # directory location on host
+      path: /var/log/webapp
+      # this field is optional
+      type: Directory
+
+## PersistentVolume ##
+https://kubernetes.io/docs/concepts/storage/persistent-volumes/
+
+root@controlplane:~# cat pv.yaml 
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-log
+spec:
+  capacity:
+    storage: 100Mi
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+   path: /pv/log
+root@controlplane:~# kubectl explain PersistentVolume --recursive | less^C -> Looks for 'hostPath'
+root@controlplane:~# 
+
+     hostPath  <Object>
+         path   <string>
+         type   <string>
+
+root@controlplane:~# kubectl create -f pv.yaml 
+persistentvolume/pv-log created
+root@controlplane:~#
+
+root@controlplane:~# kubectl get pv
+NAME     CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM   STORAGECLASS   REASON   AGE
+pv-log   100Mi      RWX            Retain           Available                                   4m59s
+root@controlplane:~# 
+
+root@controlplane:~# kubectl apply -f pv-log.yaml	##apply also worked!
+persistentvolume/pv-log created
+root@controlplane:~#
+root@controlplane:~# kubectl create -f pv-log.yaml 	##create also worked!
+persistentvolume/pv-log created
+root@controlplane:~# kubectl get pv
+NAME     CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM   STORAGECLASS   REASON   AGE
+pv-log   100Mi      RWX            Retain           Available                                   4s
+root@controlplane:~# cat pv-log.yaml 
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-log
+spec:
+  capacity:
+    storage: 100Mi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain		##Retain is the default RECLAIM POLICY / persistentVolumeReclaimPolicy is not needed if the policy = Retain
+  hostPath:
+    path: /pv/log
+root@controlplane:~# 
+
+## PersistentVolumeClaim ##
+
+root@controlplane:~# kubectl create -f pvc.yaml 
+persistentvolumeclaim/claim-log-1 created
+root@controlplane:~#
+
+root@controlplane:~# kubectl create -f pvc.yaml 
+persistentvolumeclaim/claim-log-1 created
+root@controlplane:~# cat pvc.yaml 
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: claim-log-1 
+spec:
+  accessModes:
+    - ReadWriteOnce
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 50Mi 
+root@controlplane:~# 
+
+root@controlplane:~# cat webapp_pvc.yaml 
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  labels:
+    run: webapp
+  name: webapp
+spec:
+  containers:
+  - image: kodekloud/event-simulator
+    name: webapp
+    volumeMounts:
+    - mountPath: /log
+      name: web-volume
+  volumes:
+  - name: web-volume
+    persistentVolumeClaim:
+        claimName: claim-log-1
+root@controlplane:~# 
+
+##################################################
+
+## schedule pod on node ##
+
+controlplane $ kubectl run busybox --image=busybox --command sleep 1000 --dry-run -o yaml > pod.yaml
+W0506 03:08:21.334509   10522 helpers.go:553] --dry-run is deprecated and can be replaced with --dry-run=client.
+controlplane $ ls
+go  pod.yaml
+controlplane $ vi pod.yaml	##schedule pod on node03 -> add 'nodeName: node03; under spec
+controlplane $ kubectl apply -f pod.yaml 
+pod/busybox created
+controlplane $
+controlplane $ kubectl exec -ti busybox -- sh	##bash not available so run sh
+/ # route 
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+default         10.38.0.0       0.0.0.0         UG    0      0        0 eth0	##NW 10.32.0.0
+10.32.0.0       *               255.240.0.0     U     0      0        0 eth0
+/ #
+
+controlplane $ kubectl get nodes -n kube-system -o wide ##nodes wide view, IP details included
+controlplane $ kubectl get pods -n kube-system -o wide	##podes wide view, IP details included
+
+controlplane $ kubectl get pods -n kube-system 
+controlplane $ kubectl -n kube-system logs weave-net-2h74f weave
+##################################################
+
+## Networking ##
+## Range of IP addresses configured for PODs;
+
+root@controlplane:~# kubectl logs -n kube-system weave-net-6wbwg -c weave | grep -i ipalloc
+INFO: 2021/11/29 10:34:40.653206 Command line options: map[conn-limit:200 datapath:datapath db-prefix:/weavedb/weave-net docker-api: expect-npc:true http-addr:127.0.0.1:6784 ipalloc-init:consensus=1 ipalloc-range:10.50.0.0/16 metrics-addr:0.0.0.0:6782 name:3e:99:6e:f1:aa:63 nickname:node01 no-dns:true no-masq-local:true port:6783]
+root@controlplane:~# 
+
+## IP Range configured for the services within the cluster?
+root@controlplane:~# cat /etc/kubernetes/manifests/kube-apiserver.yaml | grep -i range 
+    - --service-cluster-ip-range=10.96.0.0/12
+root@controlplane:~# 
+
+## Type of proxy is the kube-proxy configured to use;
+root@controlplane:~# kubectl get pods -n kube-system | grep -i proxy 
+kube-proxy-77kx4                       1/1     Running   0          57m
+kube-proxy-htv29                       1/1     Running   0          57m
+root@controlplane:~# kubectl logs -n kube-system kube-proxy-77kx4 | grep -i mode 
+W1129 10:33:56.453327       1 server_others.go:578] Unknown proxy mode "", assuming iptables proxy
+root@controlplane:~# 
+
+## Ingress networking ##
+
+From the view-point of Service;
+
+NodePort -> 	port on Node, which we used to access web server externally / port range 30,000 - 32767
+Port -> 	port on Service, Service has it's own IP which we called ClusterIP of the Service / mandatory field
+TargetPort -> 	port on Pod, where actual web server is running / Service fwds request here 
+
+## service definition yaml - example ##
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-service
+spec:
+  type: NodePort	##Could be ClusterIP, NodePort or LoadBalancer / default type = ClusterIP
+  ports:
+    - targetPort: 80	##on Pod , if no targetPort provide it assume to be the same as Port (80)
+      port: 80		##on Service , the only mandatory filed ** 
+      nodePort: 30007	##on Node , if not provide free port from range will be allocated (30,000 - 32,767)
+  selector:		## to link to Pod, we use selector
+    app: MyApp		##targetPort 80 on which pod -> 'MyApp'
+    type: front-end
+
+## Service ##
+Listne to Port on the Node and forward request on that Pod to a Port that running the web application / Called 'Node Port Service'.
+In summary, Service Listne to Port on the Node and forward request to port on the Pod.
+
+
+   14  kubectl get pods --all-namespaces -n kube-system 
+   15  kubectl get deployments.apps --all-namespaces
+   16  kubectl get ingress
+   18  kubectl get ingress --all-namespaces
+   19  kubectl describe ingress -n app-space 
+   20  kubectl describe ingress -n app-space ingress-wear-watch 
+   22  kubectl get ingress -n app-space ingress-wear-watch -o yaml > ingress-wear-watch.yaml
+
+   25  kubectl delete ingress -n app-space ingress-wear-watch 
+   26  kubectl apply -f ingress-wear-watch.yaml 
+   27  cat ingress-wear-watch.yaml 
+   28  vi ingress-wear-watch.yaml 
+   29  kubectl delete ingress -n app-space ingress-wear-watch 
+   30  kubectl apply -f ingress-wear-watch.yaml 
+   31  vi ingress-wear-watch.yaml 
+   32  kubectl delete ingress -n app-space ingress-wear-watch 
+   33  kubectl apply -f ingress-wear-watch.yaml 
+   34  kubectl get deployments.apps 
+   35  kubectl get deployments.apps --all-namespaces
+   36  kubectl get svc
+   37  kubectl get deployments.apps,svc --all-namespaces
+   38  cp ingress-wear-watch.yaml ingress-pay.yaml 
+   39  vi ingress-pay.yaml 
+   40  kubectl apply -f ingress-pay.yaml 
+   41  kubectl delete ingress -n app-space
+   42  kubectl delete ingress --all-namespaces
+   43  kubectl get ingress --all-namespaces
+   44  kubectl delete ingress -n critical-space ingress-pay 
+   45  vi ingress-pay.yaml 
+   46  kubectl apply -f ingress-pay.yaml 
+   47  history 
+controlplane $ 
+
+controlplane $ kubectl get ingress
+Warning: extensions/v1beta1 Ingress is deprecated in v1.14+, unavailable in v1.22+; use networking.k8s.io/v1 Ingress
+No resources found in default namespace.
+controlplane $ kubectl get ingress --all-namespaces
+Warning: extensions/v1beta1 Ingress is deprecated in v1.14+, unavailable in v1.22+; use networking.k8s.io/v1 Ingress
+NAMESPACE   NAME                 CLASS    HOSTS   ADDRESS   PORTS   AGE
+app-space   ingress-wear-watch   <none>   *                 80      5m40s
+controlplane $ 
+
+controlplane $ kubectl get ingress -n app-space ingress-wear-watch -o yaml > ingress-wear-watch.yaml
+Warning: extensions/v1beta1 Ingress is deprecated in v1.14+, unavailable in v1.22+; use networking.k8s.io/v1 Ingress
+
+controlplane $ kubectl get ingress --all-namespaces
+Warning: extensions/v1beta1 Ingress is deprecated in v1.14+, unavailable in v1.22+; use networking.k8s.io/v1 Ingress
+NAMESPACE   NAME                 CLASS    HOSTS   ADDRESS   PORTS   AGE
+app-space   ingress-wear-watch   <none>   *                 80      33m
+
+controlplane $ kubectl delete ingress -n app-space ingress-wear-watch 
+Warning: extensions/v1beta1 Ingress is deprecated in v1.14+, unavailable in v1.22+; use networking.k8s.io/v1 Ingress
+ingress.extensions "ingress-wear-watch" deleted
+
+controlplane $ kubectl apply -f ingress-wear-watch.yaml 
+Warning: extensions/v1beta1 Ingress is deprecated in v1.14+, unavailable in v1.22+; use networking.k8s.io/v1 Ingress
+ingress.extensions/ingress-wear-watch created
+controlplane $ 
+
+controlplane $ ls
+go  ingress-pay.yaml  ingress-wear-watch.yaml
+controlplane $ 
+
+spec:
+  rules:
+  - http:
+      paths:
+      - backend:
+          serviceName: wear-service
+          servicePort: 8080
+        path: /wear
+        pathType: ImplementationSpecific
+      - backend:
+          serviceName: video-service
+          servicePort: 8080
+        path: /stream
+        pathType: ImplementationSpecific
+      - backend:
+          serviceName: food-service
+          servicePort: 8080
+        path: /eat
+        pathType: ImplementationSpecific
+
+spec:
+  rules:
+  - http:
+      paths:
+      - backend:
+          serviceName: pay-service
+          servicePort: 8282
+        path: /pay
+        pathType: ImplementationSpecific
+##########
+
+controlplane $ cat ingress-svc.yaml 
+apiVersion: v1
+kind: Service
+metadata:
+  creationTimestamp: null
+  name: ingress
+  namespace: ingress-space
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+    nodePort: 30080	##note port
+  selector:
+    name: nginx-ingress
+  type: NodePort	##note type
+status:
+  loadBalancer: {}
+controlplane $ 
+##########
+
+    9  kubectl create ns ingress-space
+   10  kubectl create cm nginx-configuration -n ingress-space 
+   11  kubectl create svc ingress-serviceaccount -n ingress-space 
+   12  kubectl create sa ingress-serviceaccount -n ingress-space 
+   13  ls
+   14  vim ingress-controller.yaml 
+   15  kubectl apply -f ingress-controller.yaml 
+   16  vi ingress-controller.yaml 
+   17  kubectl apply -f ingress-controller.yaml 
+   18  kubectl -n ingress-space get roles.rbac.authorization.k8s.io 
+   19  kubectl -n ingress-space get rolebindings.rbac.authorization.k8s.io 
+   20  kubectl -n ingress-space expose deployment ingress-controller --name ingress --port 80 --target-port 80 --type NodePort --dry-run=client -o yaml > ingress-svc.yaml
+   21  ls
+   22  vi ingress-svc.yaml 
+   23  kubectl apply -f ingress-svc.yaml 
+   24  vi ingress-svc.yaml 
+   25  kubectl apply -f ingress-svc.yaml 
+   26  vi ingress-svc.yaml 
+   27  kubectl apply -f ingress-svc.yaml 
+   28  vi ingress-resource.yaml
+   29  kubectl get svc -n ingress-space 
+   30  kubectl get svc -n app-space 
+   31  cat ingress-svc.yaml 
+   32  ls
+   33  cat ingress-resource.yaml 
+   34  vi ingress-resource.yaml 
+   35  kubectl apply -f ingress-resource.yaml 
+   36  vi ingress-resource.yaml 
+   37  kubectl get svc
+   38  kubectl get svc -n app-space 
+   39  kubectl delete svc -n app-space video-service 
+   40  kubectl apply -f ingress-resource.yaml 
+   41  vi ingress-resource.yaml 
+   42  history 
+controlplane $ 
+
+controlplane $ cat ingress-resource.yaml 
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  namespace: app-space
+  name: minimal-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /wear
+        pathType: Prefix
+        backend:
+          service:
+            name: wear-service
+            port:
+              number: 8080
+      - path: /watch
+        pathType: Prefix
+        backend:
+          service:
+            name: video-service
+            port:
+              number: 8080    
+controlplane $
+
+## Ingress NW - 2 ##
+controlplane $ kubectl expose deployment -n ingress-space ingress-controller --type=NodePort --port=80 --name=ingress --dry-run=client -o yaml >ingress.yaml
+controlplane $ 
+controlplane $ kubectl apply -f ingress.yaml 
+service/ingress created
+controlplane $ cat ingress.yaml 
+apiVersion: v1
+kind: Service
+metadata:
+  creationTimestamp: null
+  name: ingress
+  namespace: ingress-space	##namespace added
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+    nodePort: 30080		##nodePort added
+  selector:
+    name: nginx-ingress
+  type: NodePort
+status:
+  loadBalancer: {}
+controlplane $ 
+
+## Network Policy - Engress (traffic exit from pod) ##
+
+controlplane $ vim internal-policy.yaml
+controlplane $ kubectl apply -f internal-policy.yaml 
+networkpolicy.networking.k8s.io/internal-policy created
+controlplane $ kubectl describe netpol internal-policy 
+Name:         internal-policy
+Namespace:    default
+Created on:   2021-05-12 03:03:16 +0000 UTC
+Labels:       <none>
+Annotations:  <none>
+Spec:
+  PodSelector:     role=db
+  Not affecting ingress traffic
+  Allowing egress traffic:
+    To Port: 8080/TCP
+    To:
+      PodSelector: role=payroll
+    ----------
+    To Port: 3306/TCP
+    To:
+      PodSelector: role=mysql
+  Policy Types: Egress
+controlplane $ cat internal-policy.yaml 
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: internal-policy 
+  namespace: default
+spec:
+  podSelector:
+    matchLabels:
+      role: db
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          role: payroll
+    ports:
+    - protocol: TCP
+      port: 8080
+  - to:
+    - podSelector:
+        matchLabels:
+          role: mysql
+    ports:
+    - protocol: TCP
+      port: 3306
+
+controlplane $ 
+
+##################################################
+
+[addons] Applied essential addon: kube-proxy
+
+Your Kubernetes control-plane has initialized successfully!
+
+To start using your cluster, you need to run the following as a regular user:
+
+  mkdir -p $HOME/.kube
+  sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+  sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+Alternatively, if you are the root user, you can run:
+
+  export KUBECONFIG=/etc/kubernetes/admin.conf
+
+You should now deploy a pod network to the cluster.
+Run "kubectl apply -f [podnetwork].yaml" with one of the options listed at:
+  https://kubernetes.io/docs/concepts/cluster-administration/addons/
+
+Then you can join any number of worker nodes by running the following on each as root:
+
+kubeadm join 172.17.0.26:6443 --token 8r6ee4.yo8xnfu5wk1tx19y \
+        --discovery-token-ca-cert-hash sha256:9507550efba54cf0d7654995fbea544c9d3de567fcb0a7664885c9915c9b696d 
+controlplane $ mkdir -p $HOME/.kube
+controlplane $   sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+controlplane $   sudo chown $(id -u):$(id -g) $HOME/.kube/config
+controlplane $ 
+
+#####
+## If you lost above token, you can always generate new token again ##
+controlplane $ kubeadm token create --print-join-command
+kubeadm join 172.17.0.26:6443 --token l0k9pm.olguezs8ii419h8d --discovery-token-ca-cert-hash sha256:9507550efba54cf0d7654995fbea544c9d3de567fcb0a7664885c9915c9b696d 
+controlplane $ 
+#####
+
+controlplane $ ssh node01
+node01 $ kubeadm join 172.17.0.26:6443 --token 8r6ee4.yo8xnfu5wk1tx19y \
+>         --discovery-token-ca-cert-hash sha256:9507550efba54cf0d7654995fbea544c9d3de567fcb0a7664885c9915c9b696d
+[preflight] Running pre-flight checks
+[preflight] Reading configuration from the cluster...
+[preflight] FYI: You can look at this config file with 'kubectl -n kube-system get cm kubeadm-config -o yaml'
+[kubelet-start] Writing kubelet configuration to file "/var/lib/kubelet/config.yaml"
+[kubelet-start] Writing kubelet environment file with flags to file "/var/lib/kubelet/kubeadm-flags.env"
+[kubelet-start] Starting the kubelet
+[kubelet-start] Waiting for the kubelet to perform the TLS Bootstrap...
+
+This node has joined the cluster:
+* Certificate signing request was sent to apiserver and a response was received.
+* The Kubelet was informed of the new secure connection details.
+
+Run 'kubectl get nodes' on the control-plane to see this node join the cluster.
+
+node01 $ 
+node01 $ 
+node01 $ 
+node01 $ logout 
+Connection to node01 closed.
+controlplane $ kubectl get nodes
+NAME           STATUS   ROLES                  AGE     VERSION
+controlplane   Ready    control-plane,master   7m28s   v1.21.0
+node01         Ready    <none>                 28s     v1.21.0
+controlplane $ 
+
+## pod nw - weave net install ##
+
+controlplane $ sudo curl -L git.io/weave -o /usr/local/bin/weave
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+100   611  100   611    0     0    707      0 --:--:-- --:--:-- --:--:--   707
+100 51395  100 51395    0     0  49898      0  0:00:01  0:00:01 --:--:-- 49898
+controlplane $ sudo chmod a+x /usr/local/bin/weave
+controlplane $
+
+    5  kubectl -n alpha get all
+    9  kubectl get svc -n alpha mysql 
+   11  kubectl get svc -n alpha mysql -o yaml > mysql-service.yaml
+   14  kubectl delete svc -n alpha mysql 
+   15  kubectl apply -f mysql-service.yaml 
+
+  name: mysql-service
+  namespace: alpha
+  resourceVersion: "814"
+  uid: 0ff8224b-1f96-49e6-af86-f0f2ce834528
+spec:
+  clusterIP: 10.99.155.140
+  clusterIPs:
+  - 10.99.155.140
+  ports:
+  - port: 3306
+    protocol: TCP
+    targetPort: 3306
+  selector:
+    name: mysql
+  sessionAffinity: None
+  type: ClusterIP
+status:
+  loadBalancer: {}
+root@controlplane:~# 
+
+   61  kubectl get deployments.apps -n delta
+   62  kubectl get deployments.apps -n delta webapp-mysql -o yaml
+   63  kubectl get deployments.apps -n delta webapp-mysql -o yaml > webapp-mysql.yaml
+   64  vim webapp-mysql.yaml 
+   65  kubectl delete deployments.apps -n delta webapp-mysql 
+   66  kubectl apply -f webapp-mysql.yaml 
+
+    spec:
+      containers:
+      - env:
+        - name: DB_Host
+          value: mysql-service
+        - name: DB_User
+          value: root 
+        - name: DB_Password
+          value: paswrd
+
+root@node01:/etc/systemd/system/kubelet.service.d# cat 10-kubeadm.conf 
+# Note: This dropin only works with kubeadm and kubelet v1.11+
+[Service]
+Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf"
+Environment="KUBELET_CONFIG_ARGS=--config=/var/lib/kubelet/config.yaml"
+# This is a file that "kubeadm init" and "kubeadm join" generates at runtime, populating the KUBELET_KUBEADM_ARGS variable dynamically
+EnvironmentFile=-/var/lib/kubelet/kubeadm-flags.env
+# This is a file that the user can use for overrides of the kubelet args as a last resort. Preferably, the user should use
+# the .NodeRegistration.KubeletExtraArgs object in the configuration files instead. KUBELET_EXTRA_ARGS should be sourced from this file.
+EnvironmentFile=-/etc/default/kubelet
+ExecStart=
+ExecStart=/usr/bin/kubelet $KUBELET_KUBECONFIG_ARGS $KUBELET_CONFIG_ARGS $KUBELET_KUBEADM_ARGS $KUBELET_EXTRA_ARGS
+root@node01:/etc/systemd/system/kubelet.service.d# 
+
+config=/var/lib/kubelet/config.yaml
+
+root@node01:/etc/systemd/system/kubelet.service.d# systemctl daemon-reload
+root@node01:/etc/systemd/system/kubelet.service.d# echo $?
+0
+root@node01:/etc/systemd/system/kubelet.service.d# systemctl status kubelet
+● kubelet.service - kubelet: The Kubernetes Node Agent
+   Loaded: loaded (/lib/systemd/system/kubelet.service; enabled; vendor preset: enabled)
+  Drop-In: /etc/systemd/system/kubelet.service.d
+           └─10-kubeadm.conf
+   Active: active (running) since Sun 2021-05-09 09:45:45 UTC; 2min 1s ago
+
+controlplane $ kubectl cluster-info ##note the default kubeapi server port 6443!!
+##########
+
+## etcd ##
+root@controlplane:~# kubectl describe pod -n kube-system etcd-controlplane
+..
+...
+etcd
+      --advertise-client-urls=https://10.113.9.6:2379
+      --cert-file=/etc/kubernetes/pki/etcd/server.crt				##--cert flag / ETCD server certificate file located
+      --client-cert-auth=true
+      --data-dir=/var/lib/etcd
+      --initial-advertise-peer-urls=https://10.113.9.6:2380
+      --initial-cluster=controlplane=https://10.113.9.6:2380
+      --key-file=/etc/kubernetes/pki/etcd/server.key
+      --listen-client-urls=https://127.0.0.1:2379,https://10.113.9.6:2379
+      --listen-metrics-urls=http://127.0.0.1:2381
+      --listen-peer-urls=https://10.113.9.6:2380
+      --name=controlplane
+      --peer-cert-file=/etc/kubernetes/pki/etcd/peer.crt
+      --peer-client-cert-auth=true
+      --peer-key-file=/etc/kubernetes/pki/etcd/peer.key				##--key flag
+      --peer-trusted-ca-file=/etc/kubernetes/pki/etcd/ca.crt			##--cacert flag / ETCD CA Certificate file located
+      --snapshot-count=10000
+      --trusted-ca-file=/etc/kubernetes/pki/etcd/ca.crt
+
+root@controlplane:~# ETCDCTL_API=3 etcdctl --cacert="/etc/kubernetes/pki/etcd/server.crt" --cert="/etc/kubernetes/pki/etcd/ca.crt" --key="/etc/kubernetes/pki/etcd/server.key" snapshot save /opt/snapshot-pre-boot.db
+Error: tls: private key does not match public key 				##if you mix up cert files snap won't work!!
+root@controlplane:~# 
+
+root@controlplane:~# ETCDCTL_API=3 etcdctl --cacert="/etc/kubernetes/pki/etcd/ca.crt" --cert="/etc/kubernetes/pki/etcd/server.crt" --key="/etc/kubernetes/pki/etcd/server.key" snapshot save /opt/snapshot-pre-boot.db
+Snapshot saved at /opt/snapshot-pre-boot.db
+root@controlplane:~# 
+
+root@controlplane:~# ETCDCTL_API=3 etcdctl snapshot restore /opt/snapshot-pre-boot.db --data-dir=/var/lib/etcd-from-backup/
+2021-05-11 18:10:32.915066 I | mvcc: restore compact to 1295
+2021-05-11 18:10:33.013722 I | etcdserver/membership: added member 8e9e05c52164694d [http://localhost:2380] to cluster cdf818194e3a8c32
+root@controlplane:~# ls -ldtrh /var/lib/etcd-from-backup/*
+drwx------ 4 root root 4.0K May 11 18:10 /var/lib/etcd-from-backup/member
+root@controlplane:~# 
+
+root@controlplane:~# cat /etc/kubernetes/manifests/etcd.yaml | grep -i data-dir
+    - --data-dir=/var/lib/etcd							##on post restore, you need to change this path -> "/var/lib/etcd-from-backup"
+root@controlplane:~# 
+
+  - hostPath:
+      path: /var/lib/etcd-from-backup
+      type: DirectoryOrCreate
+    name: etcd-data
+status: {}
+root@controlplane:~# cat /etc/kubernetes/manifests/etcd.yaml^C
+root@controlplane:~# 
+
+root@controlplane:~# kubectl get pods
+NAME                    READY   STATUS    RESTARTS   AGE
+blue-746c87566d-4h5m2   1/1     Running   0          20m
+blue-746c87566d-gmw6n   1/1     Running   0          20m
+blue-746c87566d-qdmtb   1/1     Running   0          20m
+red-75f847bf79-cl7cj    1/1     Running   0          20m
+red-75f847bf79-wb5wz    1/1     Running   0          20m
+root@controlplane:~# kubectl get deployments.apps 
+NAME   READY   UP-TO-DATE   AVAILABLE   AGE
+blue   3/3     3            3           20m
+red    2/2     2            2           20m
+
+root@controlplane:~# 
+##################################################
+
+## Cluster Maintenance ##
+kubectl get nodes
+kubectl drain node01		##Start maintenance activity
+kubectl uncordon node01		##When ready to schedule pods on node again / post maintenance
+kubectl cordon node01		##Mark node unschedulable
+
+Run the command 
+apt update; apt install kubeadm=1.19.0-00; and then 
+kubeadm upgrade apply v1.19.0; and then 
+apt install kubelet=1.19.0-00; to upgrade the kubelet on the master node.
+
+controlplane $ kubectl get nodes
+NAME           STATUS   ROLES    AGE    VERSION
+controlplane   Ready    master   103s   v1.18.0
+node01         Ready    <none>   73s    v1.18.0
+controlplane $ kubectl describe node controlplane | grep -i taint
+Taints:             <none>						##no taints in master || node. both can be used to schedule pods.
+controlplane $ kubectl describe node node01 | grep -i taint
+Taints:             <none>
+controlplane $
+
+controlplane $ kubeadm upgrade plan
+[upgrade/config] Making sure the configuration is correct:
+[upgrade/config] Reading configuration from the cluster...
+[upgrade/config] FYI: You can look at this config file with 'kubectl -n kube-system get cm kubeadm-config -oyaml'
+[preflight] Running pre-flight checks.
+[upgrade] Running cluster health checks
+[upgrade] Fetching available versions to upgrade to
+[upgrade/versions] Cluster version: v1.18.0
+[upgrade/versions] kubeadm version: v1.18.0
+I0516 03:48:03.800571   21467 version.go:252] remote version is much newer: v1.21.1; falling back to: stable-1.18
+[upgrade/versions] Latest stable version: v1.18.19
+[upgrade/versions] Latest stable version: v1.18.19
+[upgrade/versions] Latest version in the v1.18 series: v1.18.19
+[upgrade/versions] Latest version in the v1.18 series: v1.18.19
+
+Components that must be upgraded manually after you have upgraded the control plane with 'kubeadm upgrade apply':
+COMPONENT   CURRENT       AVAILABLE
+Kubelet     2 x v1.18.0   v1.18.19
+
+Upgrade to the latest version in the v1.18 series:
+
+COMPONENT            CURRENT   AVAILABLE
+API Server           v1.18.0   v1.18.19
+Controller Manager   v1.18.0   v1.18.19
+Scheduler            v1.18.0   v1.18.19
+Kube Proxy           v1.18.0   v1.18.19
+CoreDNS              1.6.7     1.6.7
+Etcd                 3.4.3     3.4.3-0
+
+You can now apply the upgrade by executing the following command:
+
+        kubeadm upgrade apply v1.18.19
+
+Note: Before you can perform this upgrade, you have to update kubeadm to v1.18.19.
+_____________________________________________________________________
+
+controlplane $ 
+##########
+
+We will be upgrading the master node first. Drain the master node of workloads and mark it UnSchedulable
+
+    info_outline
+    Hint
+
+    Master Node: SchedulingDisabled 
+
+controlplane $ kubectl drain controlplane 
+node/controlplane cordoned
+error: unable to drain node "controlplane", aborting command...
+
+There are pending nodes to be drained:
+ controlplane
+error: cannot delete DaemonSet-managed Pods (use --ignore-daemonsets to ignore): kube-system/kube-flannel-ds-amd64-jjf4d, kube-system/kube-keepalived-vip-rw99h, kube-system/kube-proxy-4zbzq
+controlplane $ kubectl drain controlplane --ignore-daemonsets 
+node/controlplane already cordoned
+WARNING: ignoring DaemonSet-managed Pods: kube-system/kube-flannel-ds-amd64-jjf4d, kube-system/kube-keepalived-vip-rw99h, kube-system/kube-proxy-4zbzq
+evicting pod kube-system/coredns-66bff467f8-pj6pq
+pod/coredns-66bff467f8-pj6pq evicted
+node/controlplane evicted
+controlplane $ kubectl get nodes
+NAME           STATUS                     ROLES    AGE   VERSION
+controlplane   Ready,SchedulingDisabled   master   20m   v1.18.0
+node01         Ready                      <none>   19m   v1.18.0
+controlplane $
+##########
+
+controlplane $ kubeadm version
+kubeadm version: &version.Info{Major:"1", Minor:"18", GitVersion:"v1.18.0", GitCommit:"9e991415386e4cf155a24b1da15becaa390438d8", GitTreeState:"clean", BuildDate:"2020-03-25T14:56:30Z", GoVersion:"go1.13.8", Compiler:"gc", Platform:"linux/amd64"}
+controlplane $ kubectl drain controlplane -ignore-daemonsets
+node/controlplane cordoned
+controlplane $ kubectl get nodes
+NAME           STATUS                     ROLES    AGE   VERSION
+controlplane   Ready,SchedulingDisabled   master   12h   v1.18.0
+node01         Ready                      <none>   12h   v1.18.0
+controlplane $
+controlplane $ apt update; apt install kubeadm=1.19.0-00 
+Get:1 http://ppa.launchpad.net/deadsnakes/ppa/ubuntu bionic InRelease [15.9 kB]
+..
+...
+Do you want to continue? [Y/n] Y
+Get:1 https://packages.cloud.google.com/apt kubernetes-xenial/main amd64 kubernetes-cni amd64 0.8.7-00 [25.0 MB]
+Get:2 https://packages.cloud.google.com/apt kubernetes-xenial/main amd64 kubeadm amd64 1.19.0-00 [7,759 kB]
+Fetched 32.8 MB in 2s (20.4 MB/s)
+(Reading database ... 145433 files and directories currently installed.)
+Preparing to unpack .../kubernetes-cni_0.8.7-00_amd64.deb ...
+Unpacking kubernetes-cni (0.8.7-00) over (0.7.5-00) ...
+Preparing to unpack .../kubeadm_1.19.0-00_amd64.deb ...
+Unpacking kubeadm (1.19.0-00) over (1.18.0-00) ...
+Setting up kubernetes-cni (0.8.7-00) ...
+Setting up kubeadm (1.19.0-00) ...
+controlplane $ 
+controlplane $ kubeadm version
+kubeadm version: &version.Info{Major:"1", Minor:"19", GitVersion:"v1.19.0", GitCommit:"e19964183377d0ec2052d1f1fa930c4d7575bd50", GitTreeState:"clean", BuildDate:"2020-08-26T14:28:32Z", GoVersion:"go1.15", Compiler:"gc", Platform:"linux/amd64"}
+controlplane $ 
+
+controlplane $ kubeadm upgrade apply v1.19.0
+[upgrade/config] Making sure the configuration is correct:
+[upgrade/config] Reading configuration from the cluster...
+[bootstrap-token] configured RBAC rules to allow certificate rotation for all node client certificates in the cluster
+[addons] Applied essential addon: CoreDNS
+[addons] Applied essential addon: kube-proxy
+
+[upgrade/successful] SUCCESS! Your cluster was upgraded to "v1.19.0". Enjoy!
+
+[upgrade/kubelet] Now that your control plane is upgraded, please proceed with upgrading your kubelets if you haven't already done so.
+controlplane $ 
+
+controlplane $ apt install kubelet=1.19.0-00
+Reading package lists... Done
+Building dependency tree       
+Reading state information... Done
+The following packages were automatically installed and are no longer required:
+  libc-ares2 libhttp-parser2.7.1 libnetplan0 libuv1 nodejs-doc python3-netifaces
+Use 'apt autoremove' to remove them.
+The following packages will be upgraded:
+  kubelet
+1 upgraded, 0 newly installed, 0 to remove and 149 not upgraded.
+Need to get 18.2 MB of archives.
+After this operation, 3,281 kB disk space will be freed.
+Get:1 https://packages.cloud.google.com/apt kubernetes-xenial/main amd64 kubelet amd64 1.19.0-00 [18.2 MB]
+Fetched 18.2 MB in 1s (14.8 MB/s)  
+(Reading database ... 145436 files and directories currently installed.)
+Preparing to unpack .../kubelet_1.19.0-00_amd64.deb ...
+Unpacking kubelet (1.19.0-00) over (1.18.0-00) ...
+Setting up kubelet (1.19.0-00) ...
+controlplane $ 
+
+controlplane $ kubectl get nodes
+NAME           STATUS                     ROLES    AGE   VERSION
+controlplane   Ready,SchedulingDisabled   master   12h   v1.19.0
+node01         Ready                      <none>   12h   v1.18.0
+controlplane $ kubectl uncordon controlplane 
+node/controlplane uncordoned
+controlplane $ kubectl get nodes
+NAME           STATUS   ROLES    AGE   VERSION
+controlplane   Ready    master   12h   v1.19.0
+node01         Ready    <none>   12h   v1.18.0
+controlplane $ 
+
+## worker nodes / node01 ##
+controlplane $ kubectl drain node01 --ignore-daemonsets 
+node/node01 already cordoned
+WARNING: ignoring DaemonSet-managed Pods: kube-system/kube-flannel-ds-amd64-gpw8t, kube-system/kube-keepalived-vip-9mkl2, kube-system/kube-proxy-6fdft
+evicting pod default/blue-8455cd8cd7-6tdcl
+evicting pod default/blue-8455cd8cd7-lt6lv
+evicting pod default/blue-8455cd8cd7-q56sf
+evicting pod default/blue-8455cd8cd7-w4n6w
+evicting pod default/blue-8455cd8cd7-xwrxl
+evicting pod default/red-59d898f784-q2xr7
+evicting pod default/red-59d898f784-vqchz
+evicting pod kube-system/coredns-f9fd979d6-2pghg
+evicting pod kube-system/coredns-f9fd979d6-j9bbd
+evicting pod kube-system/katacoda-cloud-provider-594c8c6b46-nrdhv
+I0516 05:11:41.591603   13214 request.go:621] Throttling request took 1.186296361s, request: GET:https://172.17.0.10:6443/api/v1/namespaces/kube-system/pods/katacoda-cloud-provider-594c8c6b46-nrdhv
+pod/blue-8455cd8cd7-w4n6w evicted
+pod/blue-8455cd8cd7-lt6lv evicted
+pod/blue-8455cd8cd7-q56sf evicted
+pod/red-59d898f784-q2xr7 evicted
+pod/blue-8455cd8cd7-xwrxl evicted
+pod/red-59d898f784-vqchz evicted
+pod/katacoda-cloud-provider-594c8c6b46-nrdhv evicted
+pod/blue-8455cd8cd7-6tdcl evicted
+pod/coredns-f9fd979d6-2pghg evicted
+pod/coredns-f9fd979d6-j9bbd evicted
+node/node01 evicted
+controlplane $
+controlplane $ kubectl get pods -o wide
+NAME                    READY   STATUS    RESTARTS   AGE   IP            NODE           NOMINATED NODE   READINESS GATES
+blue-8455cd8cd7-6kgtk   1/1     Running   0          71s   10.244.0.6    controlplane   <none>           <none>
+blue-8455cd8cd7-88bv4   1/1     Running   0          71s   10.244.0.7    controlplane   <none>           <none>
+blue-8455cd8cd7-8bz29   1/1     Running   0          71s   10.244.0.5    controlplane   <none>           <none>
+blue-8455cd8cd7-mc58n   1/1     Running   0          71s   10.244.0.8    controlplane   <none>           <none>
+blue-8455cd8cd7-rsnlj   1/1     Running   0          71s   10.244.0.12   controlplane   <none>           <none>
+red-59d898f784-f5vgb    1/1     Running   0          71s   10.244.0.11   controlplane   <none>           <none>
+red-59d898f784-jszv5    1/1     Running   0          71s   10.244.0.4    controlplane   <none>           <none>
+controlplane $ kubectl get nodes
+NAME           STATUS                     ROLES    AGE   VERSION
+controlplane   Ready                      master   12h   v1.19.0
+node01         Ready,SchedulingDisabled   <none>   12h   v1.18.0
+controlplane $ 
+
+node01 $ kubeadm upgrade apply v1.19.0
+node01 $ apt install kubelet=1.19.0-00
+node01 $ apt update; apt install kubeadm=1.19.0-00
+
+ontrolplane $ kubectl get nodes
+NAME           STATUS                     ROLES    AGE   VERSION
+controlplane   Ready                      master   12h   v1.19.0
+node01         Ready,SchedulingDisabled   <none>   12h   v1.19.0
+controlplane $ kubectl uncordon node01 
+node/node01 uncordoned
+controlplane $ kubectl get nodes
+NAME           STATUS   ROLES    AGE   VERSION
+controlplane   Ready    master   12h   v1.19.0
+node01         Ready    <none>   12h   v1.19.0
+controlplane $
+
+##################################################
+
+root@controlplane:~# kubectl get deployments.apps 
+NAME       READY   UP-TO-DATE   AVAILABLE   AGE
+frontend   4/4     4            4           26m
+root@controlplane:~# kubectl describe deployments.apps | grep -i strategy
+StrategyType:           RollingUpdate
+RollingUpdateStrategy:  25% max unavailable, 25% max surge
+root@controlplane:~# 
+root@controlplane:~# /root/curl-test.sh 
+Hello, Application Version: v1 ; Color: green OK
+
+Hello, Application Version: v1 ; Color: green OK
+
+root@controlplane:~# kubectl describe deployments.apps | grep -i image
+    Image:        kodekloud/webapp-color:v1
+root@controlplane:~# kubectl edit deployments.apps frontend
+root@controlplane:~# kubectl describe deployments.apps | grep -i image
+    Image:        kodekloud/webapp-color:v2
+root@controlplane:~# /root/curl-test.sh 
+Hello, Application Version: v2 ; Color: green OK
+
+Hello, Application Version: v2 ; Color: green OK
+root@controlplane:~#
+
+root@controlplane:~# cat webapp-green-2.yaml 
+apiVersion: v1 
+kind: Pod 
+metadata:
+  name: webapp-green 
+spec:
+  containers:
+  - name: ubuntu
+    image: kodekloud/webapp-color
+    args: ["--color=green"]		##how to pass argument to pod
+root@controlplane:~#  
+root@controlplane:~# cat /root/webapp-color-3/Dockerfile2 
+FROM python:3.6-alpine
+
+RUN pip install flask
+
+COPY . /opt/
+
+EXPOSE 8080
+
+WORKDIR /opt
+
+ENTRYPOINT ["python", "app.py"]		##command in container
+
+CMD ["--color", "red"]			##arguments to command in container
+root@controlplane:~#  
+root@controlplane:~# cat /root/webapp-color-3/webapp-color-pod-2.yaml 
+apiVersion: v1 
+kind: Pod 
+metadata:
+  name: webapp-green
+  labels:
+      name: webapp-green 
+spec:
+  containers:
+  - name: simple-webapp
+    image: kodekloud/webapp-color
+    command: ["python", "app.py"]	##command	**Note:- Pod will get precedence over container(Dockerfile) 	
+    args: ["--color", "pink"]		##arguments
+root@controlplane:~# 
+
+root@controlplane:~# kubectl create cm webapp-config-map --from-literal=APP_COLOR=darkblue
+configmap/webapp-config-map created
+root@controlplane:~# kubectl describe cm webapp-config-map 
+Name:         webapp-config-map
+Namespace:    default
+Labels:       <none>
+Annotations:  <none>
+
+Data
+====
+APP_COLOR:
+----
+darkblue
+Events:  <none>
+root@controlplane:~# 
+
+root@controlplane:~# kubectl get cm
+NAME                DATA   AGE
+db-config           3      7m54s
+kube-root-ca.crt    1      24m
+webapp-config-map   1      6m33s
+root@controlplane:~# kubectl get pods
+NAME           READY   STATUS    RESTARTS   AGE
+webapp-color   1/1     Running   0          2m53s
+root@controlplane:~# cat webapp-color1.yaml ^C
+root@controlplane:~# 
+
+spec:
+  containers:
+  - envFrom:
+    - configMapRef:
+       name: webapp-config-map		##referring to cm file in pod definition 
+    image: kodekloud/webapp-color
+    imagePullPolicy: Always
+    name: webapp-color
+
+root@controlplane:~# kubectl create secret generic db-secret --from-literal=DB_Host=sql01 --from-literal=DB_User=root --from-literal=DB_Password=password123 
+secret/db-secret created
+root@controlplane:~# kubectl describe secrets db-secret 
+Name:         db-secret
+Namespace:    default
+Labels:       <none>
+Annotations:  <none>
+
+Type:  Opaque
+
+Data
+====
+DB_Host:      5 bytes
+DB_Password:  11 bytes
+DB_User:      4 bytes
+root@controlplane:~# 
+
+root@controlplane:~# kubectl get pod,svc
+NAME             READY   STATUS              RESTARTS   AGE
+pod/mysql        0/1     ContainerCreating   0          27s
+pod/webapp-pod   0/1     ContainerCreating   0          27s
+
+NAME                     TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)          AGE
+service/kubernetes       ClusterIP   10.96.0.1        <none>        443/TCP          11m
+service/sql01            ClusterIP   10.104.227.188   <none>        3306/TCP         26s
+service/webapp-service   NodePort    10.109.100.151   <none>        8080:30080/TCP   27s
+root@controlplane:~# kubectl create secret generic db-secret --from-literal=DB_Host=sql01 --from-literal=DB_User=root --from-literal=DB_Password=password123 
+secret/db-secret created
+root@controlplane:~# kubectl get pods
+NAME         READY   STATUS    RESTARTS   AGE
+mysql        1/1     Running   0          17m
+webapp-pod   1/1     Running   0          17m
+root@controlplane:~# kubectl get pods webapp-pod -o yaml > webapp-pod.yaml
+root@controlplane:~# vim webapp-pod.yaml 
+root@controlplane:~# kubectl delete pods webapp-pod 
+pod "webapp-pod" deleted
+root@controlplane:~# 
+root@controlplane:~# kubectl apply -f webapp-pod.yaml 
+pod/webapp-pod created
+root@controlplane:~# cat webapp-pod.yaml 
+
+spec:
+  containers:
+  - image: kodekloud/simple-webapp-mysql
+    imagePullPolicy: Always
+    name: webapp-pod
+    envFrom:
+      - secretRef:
+          name: db-secret
+
+controlplane $ kubectl -n elastic-stack get all
+NAME                 READY   STATUS    RESTARTS   AGE
+pod/app              1/1     Running   0          27m
+pod/elastic-search   1/1     Running   0          27m
+pod/kibana           1/1     Running   0          27m
+
+NAME                    TYPE       CLUSTER-IP       EXTERNAL-IP   PORT(S)                         AGE
+service/elasticsearch   NodePort   10.105.194.231   <none>        9200:30200/TCP,9300:30300/TCP   27m
+service/kibana          NodePort   10.110.140.245   <none>        5601:30601/TCP                  27m
+controlplane $ 
+
+controlplane $ kubectl exec -n elastic-stack app cat /log/app.log | head
+kubectl exec [POD] [COMMAND] is DEPRECATED and will be removed in a future version. Use kubectl exec [POD] -- [COMMAND] instead.
+[2021-05-16 22:47:10,630] INFO in event-simulator: USER1 logged in
+[2021-05-16 22:47:12,092] INFO in event-simulator: USER4 logged in
+[2021-05-16 22:47:21,968] WARNING in event-simulator: USER7 Order failed as the item is OUT OF STOCK.
+
+controlplane $ kubectl -n elastic-stack logs app | head
+[2021-05-16 22:47:10,630] INFO in event-simulator: USER1 logged in
+[2021-05-16 22:47:12,092] INFO in event-simulator: USER4 logged in
+
+controlplane $ kubectl -n elastic-stack exec -it app cat /log/app.log | head
+kubectl exec [POD] [COMMAND] is DEPRECATED and will be removed in a future version. Use kubectl exec [POD] -- [COMMAND] instead.
+[2021-05-17 00:49:07,500] INFO in event-simulator: USER4 is viewing page3
+[2021-05-17 00:49:08,502] INFO in event-simulator: USER4 is viewing page1
+
+Edit the pod to add a sidecar container to send logs to ElasticSearch. Mount the log volume to the sidecar container.
+Only add a new container. Do not modify anything else. Use the spec on the right.
+
+    info_outline
+    Hint
+    Answer file is located at /var/answers/answer-app.yaml
+
+    Name: app
+    Container Name: sidecar
+    Container Image: kodekloud/filebeat-configured
+    Volume Mount: log-volume
+    Mount Path: /var/log/event-simulator/
+    Existing Container Name: app
+    Existing Container Image: kodekloud/event-simulator 
+
+controlplane $ kubectl -n elastic-stack get all
+NAME                 READY   STATUS    RESTARTS   AGE
+pod/app              2/2     Running   0          12s
+pod/elastic-search   1/1     Running   0          28m
+pod/kibana           1/1     Running   0          28m
+
+NAME                    TYPE       CLUSTER-IP       EXTERNAL-IP   PORT(S)                         AGE
+service/elasticsearch   NodePort   10.106.249.206   <none>        9200:30200/TCP,9300:30300/TCP   28m
+service/kibana          NodePort   10.109.189.148   <none>        5601:30601/TCP                  28m
+controlplane $ kubectl apply -f app.yaml 
+pod/app created
+controlplane $ cat app.yaml ^C
+controlplane $ 
+
+spec:
+  containers:
+  - image: kodekloud/event-simulator
+    name: app
+    volumeMounts:
+    - mountPath: /log
+      name: log-volume
+  - image: kodekloud/filebeat-configured
+    name: sidecar				##sidecar container with volume
+    volumeMounts:
+    - mountPath: /var/log/event-simulator/
+      name: log-volume
+  volumes:
+  - hostPath:
+      path: /var/log/webapp
+    name: log-volume
+
+root@controlplane:~# vim red.yaml 
+root@controlplane:~# kubectl apply -f red.yaml 
+pod/red created
+root@controlplane:~# cat red.yaml 
+spec:
+  containers:					##container
+  - command:
+    - sh
+    - -c
+    - echo The app is running! && sleep 3600
+    image: busybox:1.28
+    name: red-container
+  initContainers:				##initcontainer
+  - command: ["sleep","20"]
+    image: busybox
+    name: red-initcontainer
+####
+spec:
+  initContainers:				##mandatory for initContainer!!
+  - name: init-myservice
+    image: busybox
+    command: ["sleep","20"]         
+
+  containers:					##mandatory for container!!
+  - command:
+    - sh
+    - -c
+    - echo The app is running! && sleep 3600
+    image: busybox:1.28
+    imagePullPolicy: IfNotPresent
+    name: red-container
+    resources: {}
+    terminationMessagePath: /dev/termination-log
+    terminationMessagePolicy: File
+    volumeMounts:
+    - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+      name: default-token-h8xts
+      readOnly: true
+##################################################
+
+controlplane $ kubectl get pods
+NAME       READY   STATUS    RESTARTS   AGE
+webapp-1   1/1     Running   0          15s
+controlplane $ kubectl get pods,svc
+NAME           READY   STATUS    RESTARTS   AGE
+pod/webapp-1   1/1     Running   0          30s
+
+NAME                 TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+service/kubernetes   ClusterIP   10.96.0.1    <none>        443/TCP   80m
+controlplane $ kubectl logs webapp-1 | grep USER5
+[2021-05-18 05:13:42,303] WARNING in event-simulator: USER5 Failed to Login as the account is locked due to MANY FAILED ATTEMPTS.
+
+controlplane $ kubectl get pods
+NAME       READY   STATUS    RESTARTS   AGE
+webapp-1   1/1     Running   0          2m32s
+webapp-2   2/2     Running   0          57s
+controlplane $ kubectl logs webapp-2
+error: a container name must be specified for pod webapp-2, choose one of: [simple-webapp db]
+controlplane $ kubectl logs webapp-2 
+db             simple-webapp  
+controlplane $
+controlplane $ kubectl logs webapp-2 simple-webapp	##logs of webapp pod, simple-webapp container
+[2021-05-18 05:15:07,351] INFO in event-simulator: USER4 logged in
+[2021-05-18 05:15:09,353] INFO in event-simulator: USER2 logged out
+[2021-05-18 05:15:10,355] INFO in event-simulator: USER3 is viewing page2
+[2021-05-18 05:15:12,358] WARNING in event-simulator: USER5 Failed to Login as the account is locked due to MANY FAILED ATTEMPTS.
+[2021-05-18 05:15:12,358] INFO in event-simulator: USER1 is viewing page3
+[2021-05-18 05:15:15,362] WARNING in event-simulator: USER30 Order failed as the item is OUT OF STOCK.
+
+controlplane $ kubectl get pods
+NAME       READY   STATUS    RESTARTS   AGE
+elephant   1/1     Running   0          81s
+lion       1/1     Running   0          81s
+rabbit     1/1     Running   0          81s
+controlplane $ git clone https://github.com/kodekloudhub/kubernetes-metrics-server.git
+Cloning into 'kubernetes-metrics-server'...
+remote: Enumerating objects: 24, done.
+remote: Counting objects: 100% (12/12), done.
+remote: Compressing objects: 100% (12/12), done.
+remote: Total 24 (delta 4), reused 0 (delta 0), pack-reused 12
+Unpacking objects: 100% (24/24), done.
+controlplane $ ls
+go  kubernetes-metrics-server
+controlplane $ cd kubernetes-metrics-server/
+controlplane $ ls
+aggregated-metrics-reader.yaml  auth-delegator.yaml  auth-reader.yaml  metrics-apiservice.yaml  metrics-server-deployment.yaml  metrics-server-service.yaml  README.md  resource-reader.yaml
+controlplane $ kubectl apply -f .
+clusterrole.rbac.authorization.k8s.io/system:aggregated-metrics-reader created
+clusterrolebinding.rbac.authorization.k8s.io/metrics-server:system:auth-delegator created
+rolebinding.rbac.authorization.k8s.io/metrics-server-auth-reader created
+apiservice.apiregistration.k8s.io/v1beta1.metrics.k8s.io created
+serviceaccount/metrics-server created
+deployment.apps/metrics-server created
+service/metrics-server created
+clusterrole.rbac.authorization.k8s.io/system:metrics-server created
+clusterrolebinding.rbac.authorization.k8s.io/system:metrics-server created
+controlplane $ kubectl get pods -n kube-system 
+NAME                                   READY   STATUS              RESTARTS   AGE
+coredns-f9fd979d6-lfbws                1/1     Running             0          27m
+coredns-f9fd979d6-wd2ls                1/1     Running             0          27m
+etcd-controlplane                      1/1     Running             0          27m
+kube-apiserver-controlplane            1/1     Running             0          27m
+kube-controller-manager-controlplane   1/1     Running             0          27m
+kube-flannel-ds-amd64-mbzgz            1/1     Running             0          27m
+kube-flannel-ds-amd64-q6lnk            1/1     Running             1          27m
+kube-proxy-fpvb7                       1/1     Running             1          27m
+kube-proxy-tc2dj                       1/1     Running             0          27m
+kube-scheduler-controlplane            1/1     Running             0          27m
+metrics-server-774b56d589-znj6z        0/1     ContainerCreating   0          17s
+controlplane $ kubectl get pods -n kube-system | grep -i met
+metrics-server-774b56d589-znj6z        1/1     Running   0          36s
+controlplane $     
+controlplane $ kubectl describe pod -n kube-system metrics-server-774b56d589-znj6z 
+Name:         metrics-server-774b56d589-znj6z
+Namespace:    kube-system
+..
+...
+controlplane $ kubectl top nodes
+NAME           CPU(cores)   CPU%   MEMORY(bytes)   MEMORY%   
+controlplane   125m         6%     1069Mi          56%       
+node01         1998m        99%    648Mi           16%       
+controlplane $ kubectl top pods
+NAME       CPU(cores)   MEMORY(bytes)   
+elephant   14m          31Mi            
+lion       898m         1Mi             
+rabbit     974m         1Mi             
+controlplane $ 
+##################################################
+
+## View Certifactes ##
+
+.crt -> certificate
+.key -> private key
+
+   16  openssl x509 -in /etc/kubernetes/pki/apiserver.crt -text
+   18  openssl x509 -in /etc/kubernetes/pki/apiserver.crt -text | egrep -i 'issuer|subject'
+   21  openssl x509 -in /etc/kubernetes/pki/etcd/server.crt -text | egrep -i 'issuer|subject'
+   33  openssl x509 -in /etc/kubernetes/pki/ca.crt -text
+
+certificate file used for the kube-api server
+cat /etc/kubernetes/manifests/kube-apiserver.yaml and look for the line --tls-cert-file
+root@controlplane:~# cat /etc/kubernetes/manifests/kube-apiserver.yaml | grep -i tls-cert-file
+    - --tls-cert-file=/etc/kubernetes/pki/apiserver.crt
+root@controlplane:~# 
+
+Identify the Certificate file used to authenticate kube-apiserver as a client to ETCD Server
+Run the command cat /etc/kubernetes/manifests/kube-apiserver.yaml and look for value of etcd-certfile flag.
+root@controlplane:/etc/kubernetes/manifests# cat /etc/kubernetes/manifests/kube-apiserver.yaml | grep -i etcd-certfile
+    - --etcd-certfile=/etc/kubernetes/pki/apiserver-etcd-client.crt
+root@controlplane:/etc/kubernetes/manifests# 
+
+Identify the ETCD Server Certificate used to host ETCD server
+root@controlplane:/etc/kubernetes/manifests# cat etcd.yaml | grep -i cert-file
+    - --cert-file=/etc/kubernetes/pki/etcd/server.crt
+    - --peer-cert-file=/etc/kubernetes/pki/etcd/peer.crt
+root@controlplane:/etc/kubernetes/manifests#
+
+root@controlplane:/etc/kubernetes/pki# ls * | grep crt
+apiserver-etcd-client.crt
+apiserver-kubelet-client.crt
+apiserver.crt
+ca.crt
+front-proxy-ca.crt
+front-proxy-client.crt
+ca.crt
+healthcheck-client.crt
+peer.crt
+server.crt
+root@controlplane:/etc/kubernetes/pki# openssl x509 -in apiserver.crt -text | grep CN
+        Issuer: CN = kubernetes		##Issued by
+        Subject: CN = kube-apiserver	##CN
+root@controlplane:/etc/kubernetes/pki# 
+
+root@controlplane:/etc/kubernetes/pki# openssl x509 -in apiserver.crt -text | grep DNS	##Alternative names
+                DNS:controlplane, DNS:kubernetes, DNS:kubernetes.default, DNS:kubernetes.default.svc, DNS:kubernetes.default.svc.cluster.local, IP Address:10.96.0.1, IP Address:10.129.91.9
+root@controlplane:/etc/kubernetes/pki#
+
+root@controlplane:/etc/kubernetes/pki# ls -ltrh etcd/* | grep crt
+-rw-r--r-- 1 root root 1.1K May 23 02:50 etcd/ca.crt
+-rw-r--r-- 1 root root 1.2K May 23 02:50 etcd/server.crt
+-rw-r--r-- 1 root root 1.2K May 23 02:50 etcd/peer.crt
+-rw-r--r-- 1 root root 1.2K May 23 02:50 etcd/healthcheck-client.crt
+root@controlplane:/etc/kubernetes/pki# 
+
+root@controlplane:/etc/kubernetes/pki# openssl x509 -in etcd/server.crt -text | grep CN
+        Issuer: CN = etcd-ca
+        Subject: CN = controlplane
+root@controlplane:/etc/kubernetes/pki# 
+
+## user, role, rolebinding ##
+root@controlplane:~# kubectl config get-users 
+NAME
+dev-user
+kubernetes-admin
+root@controlplane:~# kubectl config view | grep dev-user
+- name: dev-user
+root@controlplane:~#
+root@controlplane:~# kubectl create role developer --resource=pods --verb=list,create 
+role.rbac.authorization.k8s.io/developer created
+root@controlplane:~#
+root@controlplane:~# kubectl create rolebinding dev-user-binding --role=developer
+rolebinding.rbac.authorization.k8s.io/dev-user-binding created
+root@controlplane:~#
+root@controlplane:~# kubectl delete rolebindings.rbac.authorization.k8s.io dev-user-binding 
+rolebinding.rbac.authorization.k8s.io "dev-user-binding" deleted
+root@controlplane:~#
+root@controlplane:~# kubectl create rolebinding dev-user-binding --role=developer --user=dev-user 
+rolebinding.rbac.authorization.k8s.io/dev-user-binding created
+root@controlplane:~#              
+root@controlplane:~# kubectl create rolebinding dev-user-binding --role=developer --serviceaccount	##This was on exam, rolebinding to service account
+--serviceaccount   --serviceaccount=  
+
+root@controlplane:~#
+
+k8s@terminal:~$ kubectl create role processor --resource=Secrets,ConfigMaps --verb=create --namespace=project-hamster 
+role.rbac.authorization.k8s.io/processor created
+k8s@terminal:~$ kubectl create rolebinding processor --role=processor --serviceaccount=processor
+error: serviceaccount must be <namespace>:<name>
+k8s@terminal:~$ kubectl create rolebinding processor --role=processor --serviceaccount=project-hamster:processor
+rolebinding.rbac.authorization.k8s.io/processor created
+k8s@terminal:~$ 
+
+## user, ClusterRole, ClusterRoleBiniding ##
+root@controlplane:~# kubectl config get-users 
+NAME
+kubernetes-admin
+michelle
+root@controlplane:~#         
+root@controlplane:~# kubectl create clusterrole cl-michelle --resource=nodes --verb=list 
+clusterrole.rbac.authorization.k8s.io/cl-michelle created
+root@controlplane:~# kubectl create clusterrolebinding clb_michelle --clusterrole=cl-michelle --user=michelle
+clusterrolebinding.rbac.authorization.k8s.io/clb_michelle created
+root@controlplane:~# kubectl describe clusterrole cl-michelle 
+Name:         cl-michelle
+Labels:       <none>
+Annotations:  <none>
+PolicyRule:
+  Resources  Non-Resource URLs  Resource Names  Verbs
+  ---------  -----------------  --------------  -----
+  nodes      []                 []              [list]
+root@controlplane:~#
+root@controlplane:~# kubectl describe clusterrolebindings.rbac.authorization.k8s.io clb_michelle 
+Name:         clb_michelle
+Labels:       <none>
+Annotations:  <none>
+Role:
+  Kind:  ClusterRole
+  Name:  cl-michelle
+Subjects:
+  Kind  Name      Namespace
+  ----  ----      ---------
+  User  michelle  
+root@controlplane:~# 
+
+root@controlplane:~# kubectl create clusterrole storage-admin --resource=persistentvolumes,storageclasses --verb=get,watch,list,create,update,delete
+clusterrole.rbac.authorization.k8s.io/storage-admin created
+root@controlplane:~# kubectl create clusterrolebinding michelle-storage-admin --clusterrole=storage-admin --user=michelle
+clusterrolebinding.rbac.authorization.k8s.io/michelle-storage-admin created
+root@controlplane:~# kubectl describe clusterrole storage-admin 
+Name:         storage-admin
+Labels:       <none>
+Annotations:  <none>
+PolicyRule:
+  Resources                      Non-Resource URLs  Resource Names  Verbs
+  ---------                      -----------------  --------------  -----
+  persistentvolumes              []                 []              [get watch list create update delete]
+  storageclasses.storage.k8s.io  []                 []              [get watch list create update delete]
+root@controlplane:~# kubectl get clusterrolebindings.rbac.authorization.k8s.io michelle-storage-admin 
+NAME                     ROLE                        AGE
+michelle-storage-admin   ClusterRole/storage-admin   29s
+root@controlplane:~# 
+root@controlplane:~# kubectl config get-users 
+NAME
+kubernetes-admin
+michelle
+root@controlplane:~# 
+
+## private registry ##
+controlplane $ kubectl create secret docker-registry private-reg-cred --docker-username=dock_user --docker-password=dock_password --docker-
+--docker-email      --docker-email=     --docker-password   --docker-password=  --docker-server     --docker-server=    --docker-username   --docker-username=  
+controlplane $ kubectl create secret docker-registry private-reg-cred --docker-username=dock_user --docker-password=dock_password --docker-server=myprivateregistry.com:5000 --docker-email=dock_user@myprivateregistry.com
+secret/private-reg-cred created
+controlplane $
+
+## Network Policy ##
+controlplane $ kubectl apply -f internal-policy.yaml 
+networkpolicy.networking.k8s.io/internal-policy created
+controlplane $ kubectl get netpol
+NAME              POD-SELECTOR    AGE
+internal-policy   name=internal   10s
+payroll-policy    name=payroll    28m
+controlplane $ 
+controlplane $ 
+controlplane $ kubectl describe netpol internal-policy 
+Name:         internal-policy
+Namespace:    default
+Created on:   2021-06-23 17:56:56 +0000 UTC
+Labels:       <none>
+Annotations:  <none>
+Spec:
+  PodSelector:     name=internal
+  Not affecting ingress traffic
+  Allowing egress traffic:
+    To Port: 3306/TCP
+    To:
+      PodSelector: name=mysql
+    ----------
+    To Port: 8080/TCP
+    To:
+      PodSelector: name=payroll
+  Policy Types: Egress
+controlplane $ cat internal-policy.yaml 
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: internal-policy 
+  namespace: default
+spec:
+  podSelector:
+    matchLabels:
+      name: internal 
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          name: mysql 
+    ports:
+    - protocol: TCP
+      port: 3306
+  - to:
+    - podSelector:
+        matchLabels:
+          name: payroll
+    ports:
+    - protocol: TCP
+      port: 8080
+
+controlplane $ 
+
+## multiple container pod ##
+REF - https://kubernetes.io/docs/tasks/access-application-cluster/communicate-containers-same-pod-shared-volume/
+
+root@controlplane:~# kubectl apply -f yellow.yaml 
+pod/yellow created
+root@controlplane:~# cat yellow.yaml 
+apiVersion: v1
+kind: Pod
+metadata:
+  name: yellow 
+spec:
+  restartPolicy: Never
+  containers:
+  - name: lemon 
+    image: busybox
+    command:
+      - sleep
+      - "1000"
+
+  - name: gold 
+    image: redis
+
+root@controlplane:~# 
+
+## Cluster Upgrade ##
+
+#apt update; apt-cache madison kubeadm
+#apt-get update; apt-get install -y --allow-change-held-packages kubeadm=1.20.0-00
+#kubeadm upgrade plane
+#kubeadm upgrade apply v1.20.0
+
+[upgrade/successful] SUCCESS! Your cluster was upgraded to "v1.20.0". Enjoy!
+
+[upgrade/kubelet] Now that your control plane is upgraded, please proceed with upgrading your kubelets if you haven't already done so.
+root@controlplane:~# kubectl get nodes 
+NAME           STATUS                     ROLES                  AGE   VERSION
+controlplane   Ready,SchedulingDisabled   control-plane,master   55m   v1.19.0
+node01         Ready                      <none>                 55m   v1.19.0
+root@controlplane:~#
+
+#kubectl drain controlplane --ignore-daemonsets
+#apt-get update; apt-get install -y --allow-change-held-packages kubelet=1.20.0-00 kubectl=1.20.0-00
+#systemctl daemon-reload; systemctl restart kubelet
+
+root@controlplane:~# kubectl get nodes 
+NAME           STATUS                     ROLES                  AGE   VERSION
+controlplane   Ready,SchedulingDisabled   control-plane,master   78m   v1.19.0
+node01         Ready                      <none>                 77m   v1.22.0
+root@controlplane:~# kubectl uncordon controlplane 
+node/controlplane uncordoned
+root@controlplane:~# kubectl get nodes 
+NAME           STATUS   ROLES                  AGE   VERSION
+controlplane   Ready    control-plane,master   79m   v1.20.0
+node01         Ready    <none>                 78m   v1.22.0
+root@controlplane:~# 
+
+## kubelet and kubectl upgrade on worke node ##
+
+root@controlplane:~# kubectl drain node01 --ignore-daemonsets
+node/node01 already cordoned
+error: unable to drain node "node01", aborting command...
+
+There are pending nodes to be drained:
+ node01
+error: cannot delete Pods not managed by ReplicationController, ReplicaSet, Job, DaemonSet or StatefulSet (use --force to override): default/simple-webapp-1
+root@controlplane:~#
+
+#kubectl drain node01 --ignore-daemonsets --force	##none replicated pod -> simple-webapp-1
+#apt-get update; apt-get install -y --allow-change-held-packages kubelet=1.20.0-00 kubectl=1.20.0-00
+#systemctl daemon-reload; systemctl restart kubelet
+root@controlplane:~# kubectl get nodes 
+NAME           STATUS   ROLES                  AGE   VERSION
+controlplane   Ready    control-plane,master   79m   v1.20.0
+node01         Ready    <none>                 78m   v1.22.0
+root@controlplane:~# 
+
+## etcd backup ##
+root@controlplane:~# ETCDCTL_API=3 etcdctl --endpoints=https://127.0.0.1:2379 \
+>   --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key \
+>   snapshot save /opt/snapshot-pre-boot.db
+Snapshot saved at /opt/snapshot-pre-boot.db
+root@controlplane:~# ETCDCTL_API=3 etcdctl --endpoints=https://127.0.0.1:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key snapshot status /opt/snapshot-pre-boot.db
+c6ddf1a1, 1975, 1077, 2.3 MB
+root@controlplane:~#
+
+## Restore ##
+
+root@controlplane:~# kubectl get nodes
+NAME           STATUS   ROLES                  AGE   VERSION
+controlplane   Ready    control-plane,master   20m   v1.20.0
+root@controlplane:~# kubectl get deployments.apps 
+No resources found in default namespace.
+root@controlplane:~# kubectl get pods 
+No resources found in default namespace.
+root@controlplane:~# 
+
+root@controlplane:~# vi /etc/kubernetes/manifests/etcd.yaml
+
+    volumeMounts:
+    - mountPath: /var/lib/etcd
+      name: etcd-data
+    - mountPath: /etc/kubernetes/pki/etcd
+      name: etcd-certs
+  hostNetwork: true
+  priorityClassName: system-node-critical
+  volumes:
+  - hostPath:
+      path: /etc/kubernetes/pki/etcd
+      type: DirectoryOrCreate
+    name: etcd-certs
+  - hostPath:
+      path: /var/lib/etcd-from-backup	##backup restored path -> only change to be made in the YAML file !!
+      type: DirectoryOrCreate
+    name: etcd-data
+status: {}
+"/etc/kubernetes/manifests/etcd.yaml" 77L, 2195C                                                                             77,1          Both
+
+root@controlplane:~# ETCDCTL_API=3 etcdctl --data-dir /var/lib/etcd-from-backup snapshot restore /opt/snapshot-pre-boot.db2021-11-18 19:08:34.220628 I | mvcc: restore compact to 1312
+2021-11-18 19:08:34.277656 I | etcdserver/membership: added member 8e9e05c52164694d [http://localhost:2380] to cluster cdf818194e3a8c32
+root@controlplane:~# 
+
+root@controlplane:~# kubectl get deployments.apps 
+NAME   READY   UP-TO-DATE   AVAILABLE   AGE
+blue   3/3     3            3           32m
+red    2/2     2            2           32m
+root@controlplane:~# kubectl get pods -o wide 
+NAME                    READY   STATUS    RESTARTS   AGE   IP           NODE           NOMINATED NODE   READINESS GATES
+blue-746c87566d-6rgc7   1/1     Running   0          32m   10.244.0.8   controlplane   <none>           <none>
+blue-746c87566d-82jtz   1/1     Running   0          32m   10.244.0.4   controlplane   <none>           <none>
+blue-746c87566d-ptcsz   1/1     Running   0          32m   10.244.0.7   controlplane   <none>           <none>
+red-75f847bf79-9nf9t    1/1     Running   0          32m   10.244.0.6   controlplane   <none>           <none>
+red-75f847bf79-rh4tn    1/1     Running   0          32m   10.244.0.5   controlplane   <none>           <none>
+root@controlplane:~#
+
+Notes:
+When this file is updated, the ETCD pod is automatically re-created as this is a static pod placed under the /etc/kubernetes/manifests directory.
+If the etcd pod is not getting Ready 1/1, then restart it by `kubectl delete pod -n kube-system etcd-controlplane` and wait 1 minute.
+
+## Storage Class ##
+
+controlplane ~ ➜  kubectl describe sc local-storage 
+Name:            local-storage
+IsDefaultClass:  No
+Annotations:     kubectl.kubernetes.io/last-applied-configuration={"apiVersion":"storage.k8s.io/v1","kind":"StorageClass","metadata":{"annotations":{},"name":"local-storage"},"provisioner":"kubernetes.io/no-provisioner","volumeBindingMode":"WaitForFirstConsumer"}
+
+Provisioner:           kubernetes.io/no-provisioner
+Parameters:            <none>
+AllowVolumeExpansion:  <unset>
+MountOptions:          <none>
+ReclaimPolicy:         Delete
+VolumeBindingMode:     WaitForFirstConsumer
+Events:                <none>
+
+controlplane ~ ➜  kubectl get pv
+NAME       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM   STORAGECLASS    REASON   AGE
+local-pv   500Mi      RWO            Retain           Available           local-storage            2m11s
+
+controlplane ~ ➜  kubectl get pvc
+No resources found in default namespace.
+controlplane ~ ➜  vim pvc.yaml
+controlplane ~ ➜  kubectl apply -f pvc.yaml 
+persistentvolumeclaim/local-pvc created
+controlplane ~ ➜  cat pvc.yaml 
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: local-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 500Mi
+  storageClassName: local-storage
+
+controlplane ~ ➜  
+####
+
+controlplane ~ ➜  kubectl get pvc
+NAME        STATUS    VOLUME   CAPACITY   ACCESS MODES   STORAGECLASS    AGE
+local-pvc   Pending                                      local-storage   2m29s
+
+controlplane ~ ➜  kubectl get pv
+NAME       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM   STORAGECLASS    REASON   AGE
+local-pv   500Mi      RWO            Retain           Available           local-storage            10m
+
+controlplane ~ ➜  kubectl describe pvc local-pvc 
+Name:          local-pvc
+Namespace:     default
+StorageClass:  local-storage
+Status:        Pending
+Volume:        
+Labels:        <none>
+Annotations:   <none>
+Finalizers:    [kubernetes.io/pvc-protection]
+Capacity:      
+Access Modes:  
+VolumeMode:    Filesystem
+Used By:       <none>
+Events:
+  Type    Reason                Age                   From                         Message
+  ----    ------                ----                  ----                         -------
+  Normal  WaitForFirstConsumer  42s (x26 over 6m43s)  persistentvolume-controller  waiting for first consumer to be created before binding
+
+controlplane ~ ➜  kubectl get pods 
+No resources found in default namespace.
+controlplane ~ ➜  kubectl run nginx --image=nginx:alpine $do > nginx.yaml
+controlplane ~ ➜  vi nginx.yaml 
+controlplane ~ ➜  kubectl apply -f nginx.yaml 
+pod/nginx created
+controlplane ~ ➜  cat nginx.yaml 
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  labels:
+    run: nginx
+  name: nginx
+spec:
+  volumes:
+    - name: task-pv-storage
+      persistentVolumeClaim:
+        claimName: local-pvc 
+  containers:
+  - image: nginx:alpine
+    name: nginx
+    volumeMounts:
+      - mountPath: "/var/www/html"
+        name: task-pv-storage
+
+controlplane ~ ➜  
+controlplane ~ ➜  kubectl get pv
+NAME       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM               STORAGECLASS    REASON   AGE
+local-pv   500Mi      RWO            Retain           Bound    default/local-pvc   local-storage            41m
+
+controlplane ~ ➜  kubectl get pvc
+NAME        STATUS   VOLUME     CAPACITY   ACCESS MODES   STORAGECLASS    AGE
+local-pvc   Bound    local-pv   500Mi      RWO            local-storage   35m
+
+controlplane ~ ➜
+
+## new StorageClass created ## - provisioner and volumeBindingMode provided in the question
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: delayed-volume-sc
+provisioner: kubernetes.io/aws-ebs	##provisioner update needed here ..
+parameters:
+  type: gp2
+reclaimPolicy: Retain
+allowVolumeExpansion: true
+mountOptions:
+  - debug
+volumeBindingMode: WaitForFirstConsumer
+
+## DNS / CoreDNS ##
+
+root@controlplane:~# kubectl get pods -n kube-system | grep -i dns 
+NAME                                   READY   STATUS    RESTARTS   AGE
+coredns-74ff55c5b-4s2kp                1/1     Running   0          2m31s
+coredns-74ff55c5b-wbcrr                1/1     Running   0          2m31s
+root@controlplane:~# kubectl get svc -n kube-system -o wide 
+NAME       TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)                  AGE     SELECTOR
+kube-dns   ClusterIP   10.96.0.10   <none>        53/UDP,53/TCP,9153/TCP   4m58s   k8s-app=kube-dns
+root@controlplane:~# kubectl describe svc -n kube-system kube-dns 
+Name:              kube-dns
+Namespace:         kube-system
+Labels:            k8s-app=kube-dns
+                   kubernetes.io/cluster-service=true
+                   kubernetes.io/name=KubeDNS
+Annotations:       prometheus.io/port: 9153
+                   prometheus.io/scrape: true
+Selector:          k8s-app=kube-dns
+Type:              ClusterIP
+IP Families:       <none>
+IP:                10.96.0.10
+IPs:               10.96.0.10
+Port:              dns  53/UDP
+TargetPort:        53/UDP
+Endpoints:         10.244.0.2:53,10.244.0.3:53
+Port:              dns-tcp  53/TCP
+TargetPort:        53/TCP
+Endpoints:         10.244.0.2:53,10.244.0.3:53
+Port:              metrics  9153/TCP
+TargetPort:        9153/TCP
+Endpoints:         10.244.0.2:9153,10.244.0.3:9153
+Session Affinity:  None
+Events:            <none>
+root@controlplane:~# 
+root@controlplane:~# kubectl get pod -n kube-system coredns-74ff55c5b-
+coredns-74ff55c5b-4s2kp  coredns-74ff55c5b-wbcrr  
+root@controlplane:~# kubectl get pod -n kube-system coredns-74ff55c5b-4s2kp -o yaml | grep -i dns
+  generateName: coredns-74ff55c5b-
+    k8s-app: kube-dns
+          k:{"name":"coredns"}:
+              k:{"mountPath":"/etc/coredns"}:
+        f:dnsPolicy: {}
+  name: coredns-74ff55c5b-4s2kp
+    name: coredns-74ff55c5b
+    - /etc/coredns/Corefile		##configuration file location
+    image: k8s.gcr.io/coredns:1.7.0
+    name: coredns
+      name: dns
+      name: dns-tcp
+    - mountPath: /etc/coredns
+      name: coredns-token-vhdh5
+  dnsPolicy: Default
+  serviceAccount: coredns
+  serviceAccountName: coredns
+      name: coredns
+  - name: coredns-token-vhdh5
+      secretName: coredns-token-vhdh5
+    image: k8s.gcr.io/coredns:1.7.0
+    imageID: docker-pullable://k8s.gcr.io/coredns@sha256:73ca82b4ce829766d4f1f10947c3a338888f876fbed0540dc849c89ff256e90c
+    name: coredns
+root@controlplane:~# 
+
+## How is the Corefile passed in to the CoreDNS POD?	-> ConfigMap
+
+root@controlplane:~# kubectl get pods -n kube-system | grep -i dns
+coredns-74ff55c5b-jkrr9                1/1     Running   0          7m50s
+coredns-74ff55c5b-rz4vv                1/1     Running   0          7m50s
+root@controlplane:~# kubectl describe pod -n kube-system coredns-74ff55c5b-jkrr9 ^C
+root@controlplane:~#
+Volumes:
+  config-volume:
+    Type:      ConfigMap (a volume populated by a ConfigMap)
+    Name:      coredns
+    Optional:  false
+    
+root@controlplane:~# kubectl get configmaps -n kube-system | grep -i dns
+coredns                              1      9m51s
+root@controlplane:~# kubectl describe cm -n kube-system coredns 
+Name:         coredns
+Namespace:    kube-system
+Labels:       <none>
+Annotations:  <none>
+
+Data
+====
+Corefile:
+----
+.:53 {
+    errors
+    health {
+       lameduck 5s
+    }
+    ready
+    kubernetes cluster.local in-addr.arpa ip6.arpa {
+       pods insecure
+       fallthrough in-addr.arpa ip6.arpa
+       ttl 30
+    }
+    prometheus :9153
+    forward . /etc/resolv.conf {
+       max_concurrent 1000
+    }
+    cache 30
+    loop
+    reload
+    loadbalance
+}
+
+Events:  <none>
+root@controlplane:~# 
+
+## Node failure - Test ##
+
+root@controlplane:~# kubectl get nodes
+NAME           STATUS     ROLES                  AGE     VERSION
+controlplane   Ready      control-plane,master   6m38s   v1.20.0
+node01         NotReady   <none>                 6m      v1.20.0
+root@controlplane:~# ssh node01
+root@node01:~# kubectl get nodes
+The connection to the server localhost:8080 was refused - did you specify the right host or port?
+root@node01:~# exit
+logout
+Connection to node01 closed.
+root@controlplane:~# scp -r .kube/ node01:/root
+config                                                                                                       100% 5568     3.5MB/s   00:00    
+.
+..
+root@controlplane:~# !ssh
+ssh node01
+Last login: Mon Dec 13 12:53:54 2021 from 10.28.104.7
+root@node01:~# kubectl get nodes
+NAME           STATUS     ROLES                  AGE     VERSION
+controlplane   Ready      control-plane,master   7m12s   v1.20.0
+node01         NotReady   <none>                 6m34s   v1.20.0
+root@node01:~# 
+
+root@node01:~# systemctl status kubelet
+● kubelet.service - kubelet: The Kubernetes Node Agent
+   Loaded: loaded (/lib/systemd/system/kubelet.service; enabled; vendor preset: enabled)
+  Drop-In: /etc/systemd/system/kubelet.service.d
+           └─10-kubeadm.conf
+   Active: activating (auto-restart) (Result: exit-code) since Mon 2021-12-13 12:55:48 UTC; 2s ago
+     Docs: https://kubernetes.io/docs/home/
+  Process: 6312 ExecStart=/usr/bin/kubelet $KUBELET_KUBECONFIG_ARGS $KUBELET_CONFIG_ARGS $KUBELET_KUBEADM_ARGS $KUBELET_EXTRA_ARGS (code=exited
+ Main PID: 6312 (code=exited, status=255)
+root@node01:~# systemctl start kubelet
+root@node01:~# systemctl status kubelet
+● kubelet.service - kubelet: The Kubernetes Node Agent
+   Loaded: loaded (/lib/systemd/system/kubelet.service; enabled; vendor preset: enabled)
+  Drop-In: /etc/systemd/system/kubelet.service.d
+           └─10-kubeadm.conf
+   Active: activating (auto-restart) (Result: exit-code) since Mon 2021-12-13 12:56:09 UTC; 3s ago
+     Docs: https://kubernetes.io/docs/home/
+  Process: 6397 ExecStart=/usr/bin/kubelet $KUBELET_KUBECONFIG_ARGS $KUBELET_CONFIG_ARGS $KUBELET_KUBEADM_ARGS $KUBELET_EXTRA_ARGS (code=exited
+ Main PID: 6397 (code=exited, status=255)
+lines 1-8/8 (END)
+
+root@node01:~# systemctl list-unit-files --all | grep -i kubelet
+kubelet.service                             enabled        
+root@node01:~#
+
+root@node01:~# journalctl -u kubelet.service | head
+-- Logs begin at Mon 2021-12-13 12:46:14 UTC, end at Mon 2021-12-13 13:00:47 UTC. --
+Dec 13 12:46:16 node01 kubelet[741]: F1213 12:46:16.000437     741 server.go:198] failed to load Kubelet config file /var/lib/kubelet/config.yaml, error failed to read kubelet config file "/var/lib/kubelet/config.yaml", error: open /var/lib/kubelet/config.yaml: no such file or directory
+
+Dec 13 19:05:58 node01 kubelet[10166]: F1213 19:05:58.159019   10166 server.go:257] unable to load client CA file /etc/kubernetes/pki/WRONG-CA-FILE.crt: open /etc/kubernetes/pki/WRONG-CA-FILE.crt: no such file or directory
+
+root@controlplane:~# kubectl get nodes
+NAME           STATUS   ROLES                  AGE   VERSION
+controlplane   Ready    control-plane,master   17m   v1.20.0
+node01         Ready    <none>                 17m   v1.20.0
+root@controlplane:~# 
+####
+
+root@node01:~# kubectl get nodes
+NAME           STATUS     ROLES                  AGE   VERSION
+controlplane   Ready      control-plane,master   41m   v1.20.0
+node01         NotReady   <none>                 40m   v1.20.0
+root@node01:~# 
+
+root@node01:~# systemctl status kubelet.service
+● kubelet.service - kubelet: The Kubernetes Node Agent
+   Loaded: loaded (/lib/systemd/system/kubelet.service; enabled; vendor preset: enabled)
+  Drop-In: /etc/systemd/system/kubelet.service.d
+           └─10-kubeadm.conf
+   Active: active (running) since Wed 2021-12-15 01:28:55 UTC; 14min ago
+     Docs: https://kubernetes.io/docs/home/
+ Main PID: 13464 (kubelet)
+    Tasks: 43 (limit: 5529)
+   CGroup: /system.slice/kubelet.service
+           └─13464 /usr/bin/kubelet --bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf --config=/var/lib/kubelet/config
+
+root@node01:~# journalctl -u kubelet | head
+-- Logs begin at Wed 2021-12-15 01:30:13 UTC, end at Wed 2021-12-15 01:42:48 UTC. --
+Dec 15 01:30:13 node01 kubelet[13464]: E1215 01:30:13.603963   13464 kubelet_node_status.go:93] Unable to register node "node01" with API server: Post "https://controlplane:6553/api/v1/nodes": dial tcp 10.57.170.5:6553: connect: connection refused
+Dec 15 01:30:13 node01 kubelet[13464]: E1215 01:30:13.605031   13464 kubelet.go:2240] node "node01" not found
+
+root@node01:~# cat -n /etc/kubernetes/kubelet.conf | grep 6553
+     5      server: https://controlplane:6553			##Wrong!! Correct port is 6443
+root@node01:~#
+
+root@node01:~# vi /etc/kubernetes/kubelet.conf 
+root@node01:~# 
+root@node01:~# kubectl get nodes
+NAME           STATUS     ROLES                  AGE   VERSION
+controlplane   Ready      control-plane,master   45m   v1.20.0
+node01         NotReady   <none>                 44m   v1.20.0
+root@node01:~# systemctl daemon-reload 
+root@node01:~# kubectl get nodes
+NAME           STATUS     ROLES                  AGE   VERSION
+controlplane   Ready      control-plane,master   45m   v1.20.0
+node01         NotReady   <none>                 45m   v1.20.0
+root@node01:~# systemctl restart kubelet.service		##kubelet.service restart needed !!
+root@node01:~# kubectl get nodes
+NAME           STATUS   ROLES                  AGE   VERSION
+controlplane   Ready    control-plane,master   46m   v1.20.0
+node01         Ready    <none>                 45m   v1.20.0
+root@node01:~# 
+
+
+    kubectl -n kube-system get deployment coredns -o yaml | \
+      sed 's/allowPrivilegeEscalation: false/allowPrivilegeEscalation: true/g' | \
+      kubectl apply -f -
+####
+
+root@controlplane:~# cat akshay.csr | base64 | tr -d "\n"
+
+root@controlplane:~# cat akshay.yaml 
+apiVersion: certificates.k8s.io/v1
+kind: CertificateSigningRequest
+metadata:
+  name: akshay
+spec:
+  request: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURSBSRVFVRVNULS0tLS0KTUlJQ1ZqQ0NBVDRDQVFBd0VURVBNQTBHQTFVRUF3d0dZV3R6YUdGNU1JSUJJakFOQmdrcWhraUc5dzBCQVFFRgpBQU9DQVE4QU1JSUJDZ0tDQVFFQXZxZlk4VkhmRDNKYkpVc0ZqUWdvOHlXemgvTFM1eWJyUW5XcnBZOUVjRnNzCnB0a2JWSWFqUXRDUHRrYmJXK2FYOWhRbWFER0JxMHBzcVhTOFh0OVhRQm9Ebk5SdUxOdnJqdXlRTUFoZXhjS2kKL01CcHg4NDFIV3hGNlAvUEc0ZDJQeVVGRUZ0VEJpcURhbVRhQUMyK2psMWFObHp4S0FHbUo2UDVJdy9uRmp1TwpHYU9mTjZuQ1h5SG9rTVJ6WFd5U09rcmVUcWlEdGVZK3RLSFB5ZlN1VWhIU1lFWFdSZmw3TktPUGhRY1hkbm9wCkFMUkpOWU1oOXhFMi8xWUtvbDE1L0tOOFpLOXlzV05hQzhJLzN6LzFqb2ErSTJ3SlNuVUNaTFRBWms4YUlyTkQKQXZvMFd0dVFaZW9tbGtiNWN1aGdwbGpiR3F5ODRXYWFQRU9kNDJaT3V3SURBUUFCb0FBd0RRWUpLb1pJaHZjTgpBUUVMQlFBRGdnRUJBRXVUWmFnbEZ1aW1mNWlYRjJKNXpUU2lobmw2eW9ZcWxKeEZiOTNqVjlRYjZ5aXNRdjdxCmRPbVZscDdBNXZmTWVDeXMxMVNtRThETnBXM3pLVUZSUEl3aytvb1hDSVdMV2VsOTFyVjIvM25PbjRjVEdzU3UKS2J6MWhvVUk5Y09XRFRJWlNBZEJxdi9hRGJlcnoxM1J4Z0t0Yk4wNU5uTmlKUURzRkI3eWlPUS91OEZaT0hzagpSZVgyM2pqWWM5UmVmK0ozUXJ2SVloN2NKc1pkdVk0WENrM1hDdmZpd1cvUzZienhTaHBmeUxlTlliTjZBblQ2CmJSTmI5VUo1UWJVekpZaDdYMGplTi9ZL2pUVkdtRXhPNHBHL1BxLzV2WnE1RUh2Um91aStaN1Y0Vlp6ZWIvaTcKbkk3MGs1TW5XY3ovSmdCQnpLeEJSemlTbllSUmJSdlcrVEU9Ci0tLS0tRU5EIENFUlRJRklDQVRFIFJFUVVFU1QtLS0tLQo=
+  signerName: kubernetes.io/kube-apiserver-client
+  usages:
+  - client auth
+root@controlplane:~# 
+
+root@controlplane:~# kubectl apply -f akshay.yaml 
+certificatesigningrequest.certificates.k8s.io/akshay created
+root@controlplane:~# kubectl get csr
+NAME        AGE     SIGNERNAME                                    REQUESTOR                  CONDITION
+akshay      4m51s   kubernetes.io/kube-apiserver-client           kubernetes-admin           Pending
+csr-jw7pm   18m     kubernetes.io/kube-apiserver-client-kubelet   system:node:controlplane   Approved,Issued
+root@controlplane:~# kubectl certificate approve akshay 
+certificatesigningrequest.certificates.k8s.io/akshay approved
+root@controlplane:~# kubectl get csr
+NAME        AGE     SIGNERNAME                                    REQUESTOR                  CONDITION
+akshay      5m30s   kubernetes.io/kube-apiserver-client           kubernetes-admin           Approved,Issued
+csr-jw7pm   18m     kubernetes.io/kube-apiserver-client-kubelet   system:node:controlplane   Approved,Issued
+root@controlplane:~#
+
+root@controlplane:~# kubectl get csr          
+NAME          AGE     SIGNERNAME                                    REQUESTOR                  CONDITION
+agent-smith   3m34s   kubernetes.io/kube-apiserver-client           agent-x                    Pending
+akshay        11m     kubernetes.io/kube-apiserver-client           kubernetes-admin           Approved,Issued
+csr-jw7pm     24m     kubernetes.io/kube-apiserver-client-kubelet   system:node:controlplane   Approved,Issued
+root@controlplane:~# kubectl certificate deny agent-smith
+certificatesigningrequest.certificates.k8s.io/agent-smith denied
+root@controlplane:~# kubectl get csr
+NAME          AGE     SIGNERNAME                                    REQUESTOR                  CONDITION
+agent-smith   3m54s   kubernetes.io/kube-apiserver-client           agent-x                    Denied
+akshay        11m     kubernetes.io/kube-apiserver-client           kubernetes-admin           Approved,Issued
+csr-jw7pm     24m     kubernetes.io/kube-apiserver-client-kubelet   system:node:controlplane   Approved,Issued
+root@controlplane:~# 
+oot@controlplane:~# kubectl delete csr agent-smith 
+certificatesigningrequest.certificates.k8s.io "agent-smith" deleted
+root@controlplane:~# kubectl get csr
+NAME        AGE   SIGNERNAME                                    REQUESTOR                  CONDITION
+akshay      12m   kubernetes.io/kube-apiserver-client           kubernetes-admin           Approved,Issued
+csr-jw7pm   25m   kubernetes.io/kube-apiserver-client-kubelet   system:node:controlplane   Approved,Issued
+root@controlplane:~# 
+
+## Roles 
+
+root@controlplane:~# kubectl get all -n blue 
+NAME                READY   STATUS    RESTARTS   AGE
+pod/blue-app        0/1     Pending   0          28m
+pod/dark-blue-app   0/1     Pending   0          28m
+root@controlplane:~# kubectl get roles developer 
+NAME        CREATED AT
+developer   2021-12-16T23:34:56Z
+root@controlplane:~# kubectl describe roles.rbac.authorization.k8s.io 
+Name:         developer
+Labels:       <none>
+Annotations:  <none>
+PolicyRule:
+  Resources  Non-Resource URLs  Resource Names  Verbs
+  ---------  -----------------  --------------  -----
+  pods       []                 []              [list create delete]
+root@controlplane:~# kubectl describe roles.rbac.authorization.k8s.io -n blue 
+Name:         developer
+Labels:       <none>
+Annotations:  <none>
+PolicyRule:
+  Resources  Non-Resource URLs  Resource Names  Verbs
+  ---------  -----------------  --------------  -----
+  pods       []                 [blue-app]      [get watch create delete]
+root@controlplane:~# kubectl get pods -n blue 
+NAME            READY   STATUS    RESTARTS   AGE
+blue-app        0/1     Pending   0          31m
+dark-blue-app   0/1     Pending   0          31m
+root@controlplane:~# kubectl edit role developer -n blue	##dark-blue-app added!
+role.rbac.authorization.k8s.io/developer edited
+root@controlplane:~# kubectl describe roles.rbac.authorization.k8s.io -n blue 
+Name:         developer
+Labels:       <none>
+Annotations:  <none>
+PolicyRule:
+  Resources  Non-Resource URLs  Resource Names   Verbs
+  ---------  -----------------  --------------   -----
+  pods       []                 [blue-app]       [get watch create delete]
+  pods       []                 [dark-blue-app]  [get watch create delete]
+root@controlplane:~# 
+
+controlplane ~ ➜  kubectl cluster-info 
+Kubernetes control plane is running at https://127.0.0.1:6443
+CoreDNS is running at https://127.0.0.1:6443/api/v1/namespaces/kube-system/services/kube-dns:dns/proxy
+Metrics-server is running at https://127.0.0.1:6443/api/v1/namespaces/kube-system/services/https:metrics-server:/proxy
+
+To further debug and diagnose cluster problems, use 'kubectl cluster-info dump'.
+
+controlplane ~ ➜  
+##########
+
+## Getting a shell to a container ##
+
+REF - https://kubernetes.io/docs/tasks/debug-application-cluster/get-shell-running-container/
+
+root@controlplane:~# kubectl get pods -o wide 
+NAME     READY   STATUS    RESTARTS   AGE   IP           NODE           NOMINATED NODE   READINESS GATES
+webapp   1/1     Running   0          11m   10.244.0.4   controlplane   <none>           <none>
+root@controlplane:~# kubectl exec --stdin --tty webapp -- /bin/sh
+/ # hostname
+webapp
+/ # 
+##########

@@ -1,14 +1,4 @@
-This is a reminder that your eligibility to take the CKA exam expires on 2021-05-15, which means you must take the exam (including your one-free retake if eligible) no later than 2021-05-15. As a reminder, due to Covid-19 online testing demand has increased significantly and you are encouraged to schedule at the first opportunity
-
-Ruwinda Fernando
-https://trainingportal.linuxfoundation.org/learn/dashboard/
-
-Reminder Mail subject -> "Action Required: CKA Exam Registration expires on 2021-05-15".
-
-REF - https://training.linuxfoundation.org/certification/certified-kubernetes-administrator-cka/
-
 Domains & Competencies
-Collapse All
 
 Storage10%
 Understand storage classes, persistent volumes
